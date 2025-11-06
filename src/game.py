@@ -13,7 +13,9 @@ from src.ui.screens.planet_screen import PlanetScreen
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
-    PANEL_PADDING, COLONIZABLE_PLANET_TYPES
+    PANEL_PADDING, COLONIZABLE_PLANET_TYPES,
+    POPULATION_FOOD_UPKEEP, POPULATION_ENERGY_UPKEEP,
+    DEFICIT_EFFECTS
 )
 
 
@@ -500,7 +502,13 @@ class Game:
             if ship in self.selected_ships:
                 self.selected_ships.remove(ship)
 
-        # 2. Wzrost populacji i produkcja na planetach
+        # 2. Aktualizacja zasobów imperii (przed wzrostem populacji!)
+        self._update_empire_resources()
+
+        # 3. Aplikuj efekty deficytu (głód, blackout)
+        self._apply_deficit_effects()
+
+        # 4. Wzrost populacji i produkcja na planetach
         for system in self.galaxy.systems:
             for planet in system.planets:
                 if planet.is_colonized:
@@ -521,14 +529,14 @@ class Game:
                         self.next_ship_id += 1
                         print(f"✓ {new_ship.name} wyprodukowany w systemie {system.name}!")
 
-        # 3. Aktualizacja zasobów imperii
-        self._update_empire_resources()
-
     def _update_empire_resources(self):
         """Aktualizuj całkowite zasoby wszystkich imperiów"""
         for empire in self.empires:
             total_prod = 0.0
             total_sci = 0.0
+            total_food = 0.0
+            total_energy = 0.0
+            total_population = 0.0
 
             # Sumuj z wszystkich planet
             for system in self.galaxy.systems:
@@ -536,9 +544,70 @@ class Game:
                     if planet.owner_id == empire.id:
                         total_prod += planet.calculate_production()
                         total_sci += planet.calculate_science()
+                        total_food += planet.calculate_food()
+                        total_energy += planet.calculate_energy()
+                        total_population += planet.population
 
+            # Oblicz zużycie zasobów
+            food_upkeep = total_population * POPULATION_FOOD_UPKEEP
+            energy_upkeep = total_population * POPULATION_ENERGY_UPKEEP
+            # TODO: Dodać zużycie energii przez statki
+
+            # Oblicz bilans (produkcja - zużycie)
+            food_balance = total_food - food_upkeep
+            energy_balance = total_energy - energy_upkeep
+
+            # Zapisz do imperium
             empire.total_production = total_prod
             empire.total_science = total_sci
+            empire.total_food = total_food
+            empire.total_energy = total_energy
+            empire.food_upkeep = food_upkeep
+            empire.energy_upkeep = energy_upkeep
+            empire.food_balance = food_balance
+            empire.energy_balance = energy_balance
+
+            # Sprawdź deficyty
+            empire.has_starvation = food_balance < 0
+            empire.has_blackout = energy_balance < 0
+
+    def _apply_deficit_effects(self):
+        """Aplikuj efekty deficytu zasobów (jak w Stellaris)"""
+        for empire in self.empires:
+            empire_name = empire.name if not empire.is_player else "Twoje imperium"
+
+            # EFEKT 1: Głód (brak żywności)
+            if empire.has_starvation:
+                penalty_rate = DEFICIT_EFFECTS['food']['penalty_per_turn']
+                planets_affected = []
+
+                # Populacja umiera na wszystkich planetach
+                for system in self.galaxy.systems:
+                    for planet in system.planets:
+                        if planet.owner_id == empire.id and planet.population > 0:
+                            # Spadek populacji o 5% co turę
+                            population_loss = planet.population * penalty_rate
+                            planet.population = max(1.0, planet.population - population_loss)
+                            planets_affected.append(planet.name)
+
+                if empire.is_player:
+                    print(f"⚠️ GŁÓD! Brak żywności ({empire.food_balance:.1f})")
+                    print(f"   Populacja wymiera na {len(planets_affected)} planetach!")
+                    print(f"   Straty: {penalty_rate*100:.0f}% populacji co turę")
+
+            # EFEKT 2: Blackout (brak energii)
+            if empire.has_blackout:
+                # Kary do produkcji i nauki
+                penalty_prod = DEFICIT_EFFECTS['energy']['penalty_production']
+                penalty_sci = DEFICIT_EFFECTS['energy']['penalty_science']
+
+                # Kary są aplikowane automatycznie w następnej turze
+                # (bo _update_empire_resources() jest wywoływane przed produkcją)
+
+                if empire.is_player:
+                    print(f"⚠️ BLACKOUT! Brak energii ({empire.energy_balance:.1f})")
+                    print(f"   Produkcja: -{penalty_prod*100:.0f}%, Nauka: -{penalty_sci*100:.0f}%")
+                    print(f"   Buduj elektrownie lub zmniejsz populację!")
 
     def render(self):
         """Renderuj grę"""
@@ -587,16 +656,53 @@ class Game:
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, Colors.UI_TEXT)
 
-        # Zasoby imperium
-        y_offset += 25
-        draw_text(self.screen, f"Produkcja: {self.player_empire.total_production:.1f}/tura",
+        # === ZASOBY IMPERIUM ===
+        y_offset += 30
+        draw_text(self.screen, "═══ Zasoby ═══",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, Colors.UI_HIGHLIGHT)
+
+        # Produkcja (minerały)
+        y_offset += 22
+        draw_text(self.screen, f"🔨 Produkcja: {self.player_empire.total_production:.1f}",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, Colors.UI_TEXT)
 
+        # Nauka
         y_offset += 20
-        draw_text(self.screen, f"Nauka: {self.player_empire.total_science:.1f}/tura",
+        draw_text(self.screen, f"🔬 Nauka: {self.player_empire.total_science:.1f}",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, Colors.UI_TEXT)
+
+        # Żywność (z bilansem)
+        y_offset += 20
+        food_color = Colors.UI_TEXT
+        if self.player_empire.has_starvation:
+            food_color = (255, 100, 100)  # Czerwony przy głodzie
+        elif self.player_empire.food_balance < 5:
+            food_color = (255, 200, 100)  # Pomarańczowy przy niskim bilansie
+
+        food_text = f"🌾 Żywność: {self.player_empire.food_balance:+.1f}"
+        if self.player_empire.has_starvation:
+            food_text += " ⚠️GŁÓD"
+        draw_text(self.screen, food_text,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, food_color)
+
+        # Energia (z bilansem)
+        y_offset += 20
+        energy_color = Colors.UI_TEXT
+        if self.player_empire.has_blackout:
+            energy_color = (255, 100, 100)  # Czerwony przy blackoucie
+        elif self.player_empire.energy_balance < 5:
+            energy_color = (255, 200, 100)  # Pomarańczowy przy niskim bilansie
+
+        energy_text = f"⚡ Energia: {self.player_empire.energy_balance:+.1f}"
+        if self.player_empire.has_blackout:
+            energy_text += " ⚠️BRAK"
+        draw_text(self.screen, energy_text,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, energy_color)
 
         # Statystyki eksploracji
         explored_count = len(self.player_empire.explored_systems)

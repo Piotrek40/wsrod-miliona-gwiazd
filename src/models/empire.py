@@ -26,9 +26,23 @@ class Empire:
     current_research: Optional[str] = None
     research_points: float = 0.0
 
-    # Zasoby
+    # Zasoby (produkcja i zużycie)
     total_production: float = 0.0
     total_science: float = 0.0
+    total_food: float = 0.0
+    total_energy: float = 0.0
+
+    # Zużycie zasobów
+    food_upkeep: float = 0.0     # Ile żywności zużywa populacja
+    energy_upkeep: float = 0.0   # Ile energii zużywają budynki/statki
+
+    # Bilans zasobów (produkcja - zużycie)
+    food_balance: float = 0.0
+    energy_balance: float = 0.0
+
+    # Efekty deficytu
+    has_starvation: bool = False    # Czy trwa głód
+    has_blackout: bool = False      # Czy jest blackout
 
     # Dyplomacja
     relations: dict[int, str] = field(default_factory=dict)  # empire_id -> status (war/peace/ally)
