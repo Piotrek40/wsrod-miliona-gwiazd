@@ -3,7 +3,7 @@ Model planety
 """
 from dataclasses import dataclass, field
 from typing import Optional
-from src.config import PlanetType, Colors
+from src.config import PlanetType, Colors, ShipType, SHIP_COST
 import random
 
 
@@ -14,6 +14,28 @@ class Building:
     production_bonus: float = 0.0
     science_bonus: float = 0.0
     defense_bonus: float = 0.0
+
+
+@dataclass
+class ProductionItem:
+    """Element kolejki produkcji"""
+    item_type: str  # "ship" lub "building"
+    ship_type: Optional[ShipType] = None
+    building_name: Optional[str] = None
+    total_cost: float = 0.0
+    accumulated_production: float = 0.0
+
+    @property
+    def is_complete(self) -> bool:
+        """Czy produkcja jest zakończona"""
+        return self.accumulated_production >= self.total_cost
+
+    @property
+    def progress_percent(self) -> float:
+        """Procent ukończenia"""
+        if self.total_cost == 0:
+            return 100.0
+        return (self.accumulated_production / self.total_cost) * 100.0
 
 
 @dataclass
@@ -100,6 +122,35 @@ class Planet:
         if self.population < self.max_population:
             growth = self.population * growth_rate
             self.population = min(self.population + growth, self.max_population)
+
+    def add_ship_to_queue(self, ship_type: ShipType):
+        """Dodaj statek do kolejki produkcji"""
+        cost = SHIP_COST.get(ship_type, 100)
+        item = ProductionItem(
+            item_type="ship",
+            ship_type=ship_type,
+            total_cost=cost
+        )
+        self.production_queue.append(item)
+
+    def process_production(self) -> Optional[ProductionItem]:
+        """Przetwórz produkcję na turę. Zwraca ukończony element jeśli jest."""
+        if not self.production_queue or not self.is_colonized:
+            return None
+
+        # Pobierz pierwszy element z kolejki
+        current_item = self.production_queue[0]
+
+        # Dodaj produkcję z tej tury
+        production_this_turn = self.calculate_production()
+        current_item.accumulated_production += production_this_turn
+
+        # Sprawdź czy ukończono
+        if current_item.is_complete:
+            self.production_queue.pop(0)
+            return current_item
+
+        return None
 
     @staticmethod
     def generate_random(name: str, orbit_x: float, orbit_y: float) -> 'Planet':

@@ -100,6 +100,15 @@ SHIP_SPEED = {
     ShipType.TRANSPORT: 2.0,
 }
 
+SHIP_COST = {
+    ShipType.SCOUT: 50,
+    ShipType.FIGHTER: 80,
+    ShipType.CRUISER: 150,
+    ShipType.BATTLESHIP: 300,
+    ShipType.COLONY_SHIP: 100,
+    ShipType.TRANSPORT: 70,
+}
+
 # === KAMERA ===
 CAMERA_MOVE_SPEED = 10
 CAMERA_ZOOM_MIN = 0.5

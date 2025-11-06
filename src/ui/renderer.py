@@ -110,7 +110,7 @@ class Renderer:
         # Rysuj jako szary punkt
         pygame.draw.circle(self.screen, Colors.FOG_OF_WAR, (int(screen_x), int(screen_y)), 2)
 
-    def draw_ship(self, ship: Ship, empire_color: tuple):
+    def draw_ship(self, ship: Ship, empire_color: tuple, is_selected: bool = False):
         """Rysuj statek"""
         screen_x, screen_y = self.camera.world_to_screen(ship.x, ship.y)
 
@@ -126,16 +126,24 @@ class Renderer:
         ]
         pygame.draw.polygon(self.screen, empire_color, points)
 
+        # Jeśli wybrany, rysuj obramowanie
+        if is_selected:
+            pygame.draw.circle(self.screen, Colors.WHITE, (int(screen_x), int(screen_y)), int(size * 1.5), 2)
+
         # Jeśli statek się porusza, rysuj linię do celu
         if ship.is_moving and ship.target_x and ship.target_y:
             target_screen_x, target_screen_y = self.camera.world_to_screen(ship.target_x, ship.target_y)
             pygame.draw.line(self.screen, empire_color, (screen_x, screen_y), (target_screen_x, target_screen_y), 1)
 
-    def draw_ships(self, ships: list[Ship], empires: dict[int, tuple]):
+    def draw_ships(self, ships: list[Ship], empires: dict[int, tuple], selected_ships: list[Ship] = None):
         """Rysuj wszystkie statki"""
+        if selected_ships is None:
+            selected_ships = []
+
         for ship in ships:
             empire_color = empires.get(ship.owner_id, Colors.WHITE)
-            self.draw_ship(ship, empire_color)
+            is_selected = ship in selected_ships
+            self.draw_ship(ship, empire_color, is_selected)
 
     def highlight_system(self, system: StarSystem):
         """Podświetl wybrany system"""
