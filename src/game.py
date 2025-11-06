@@ -133,6 +133,9 @@ class Game:
         self.running = True
         self.initialize_new_game()
 
+        # Inicjalizuj zasoby na starcie
+        self._update_empire_resources()
+
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0  # Delta time w sekundach
             self.handle_events()
@@ -215,9 +218,13 @@ class Game:
         elif key == pygame.K_SPACE:
             self.end_turn()
 
-        # P - otwórz ekran planety
+        # P lub 1-9 - otwórz ekran planety
         elif key == pygame.K_p:
-            self._open_planet_screen()
+            self._open_planet_screen(0)  # Pierwsza planeta
+        elif pygame.K_1 <= key <= pygame.K_9:
+            # Klawsze 1-9 otwierają konkretną planetę
+            planet_index = key - pygame.K_1
+            self._open_planet_screen(planet_index)
 
         # Escape - wyjście lub zamknij ekran planety
         elif key == pygame.K_ESCAPE:
@@ -226,7 +233,7 @@ class Game:
             else:
                 self.running = False
 
-    def _open_planet_screen(self):
+    def _open_planet_screen(self, planet_index: int = 0):
         """Otwórz ekran szczegółów planety"""
         if not self.selected_system:
             print("Najpierw wybierz system!")
@@ -239,8 +246,13 @@ class Game:
             print("Brak twoich planet w tym systemie!")
             return
 
-        # Otwórz ekran pierwszej planety
-        planet = player_planets[0]
+        # Sprawdź czy indeks jest w zakresie
+        if planet_index >= len(player_planets):
+            print(f"Brak planety #{planet_index + 1} w tym systemie (masz {len(player_planets)})")
+            return
+
+        # Otwórz ekran wybranej planety
+        planet = player_planets[planet_index]
         self.planet_screen = PlanetScreen(
             planet=planet,
             system_name=self.selected_system.name,
@@ -300,12 +312,12 @@ class Game:
                 return ship
         return None
 
-    def _try_colonize(self, colony_ship: Ship):
-        """Spróbuj skolonizować planetę statkiem kolonistów"""
+    def _try_colonize(self, colony_ship: Ship) -> bool:
+        """Spróbuj skolonizować planetę statkiem kolonistów. Zwraca True jeśli się powiodło."""
         # Znajdź system docelowy
         target_system = self.galaxy.find_system_by_id(colony_ship.target_system_id)
         if not target_system:
-            return
+            return False
 
         # Sprawdź czy system jest odkryty
         if not target_system.is_explored_by(colony_ship.owner_id):
@@ -315,7 +327,8 @@ class Game:
         free_planets = target_system.get_free_planets()
         if not free_planets:
             print(f"Brak wolnych planet w systemie {target_system.name}")
-            return
+            colony_ship.target_system_id = None  # Wyczyść cel
+            return False
 
         # Skolonizuj pierwszą wolną planetę
         planet = free_planets[0]
@@ -323,10 +336,8 @@ class Game:
 
         print(f"✓ {planet.name} skolonizowana przez {self.empires[colony_ship.owner_id].name}!")
 
-        # Usuń statek kolonistów (zużyty podczas kolonizacji)
-        self.ships.remove(colony_ship)
-        if colony_ship in self.selected_ships:
-            self.selected_ships.remove(colony_ship)
+        # Zwróć True - statek zostanie usunięty przez wywołującego
+        return True
 
     def _handle_right_click(self, mouse_pos):
         """Obsługa prawego kliknięcia - wydawanie rozkazów"""
@@ -356,31 +367,51 @@ class Game:
                 print(f"{ship.name} wysłany do pozycji ({int(world_x)}, {int(world_y)})")
 
     def update(self, dt: float):
-        """Aktualizuj stan gry"""
-        # Aktualizuj ruch statków
-        for ship in self.ships:
-            ship.update_movement(dt)
-
-            # Sprawdź eksplorację systemów
-            if not ship.is_moving and ship.target_system_id is not None:
-                target_system = self.galaxy.find_system_by_id(ship.target_system_id)
-                if target_system and not target_system.is_explored_by(ship.owner_id):
-                    target_system.explore(ship.owner_id)
-                    empire = next((e for e in self.empires if e.id == ship.owner_id), None)
-                    if empire:
-                        empire.explore_system(ship.target_system_id)
-                    print(f"✓ {target_system.name} odkryty!")
-
-            # Sprawdź kolonizację
-            if not ship.is_moving and ship.ship_type == ShipType.COLONY_SHIP and ship.target_system_id is not None:
-                self._try_colonize(ship)
+        """Aktualizuj stan gry (teraz tylko wizualizacja)"""
+        # W trybie turowym update() nie przesuwa statków
+        # Ruch odbywa się tylko podczas end_turn()
+        pass
 
     def end_turn(self):
         """Zakończ turę"""
         self.current_turn += 1
-        print(f"Tura {self.current_turn}")
+        print(f"\n=== TURA {self.current_turn} ===")
 
-        # Wzrost populacji i produkcja na planetach
+        # 1. Ruch statków (turowy)
+        ships_to_remove = []
+        explored_systems = set()
+
+        for ship in self.ships:
+            arrived = ship.move_one_turn()
+
+            # Sprawdź eksplorację systemów (tylko jeśli dotarł)
+            if arrived and ship.target_system_id is not None:
+                if ship.target_system_id not in explored_systems:
+                    target_system = self.galaxy.find_system_by_id(ship.target_system_id)
+                    if target_system and not target_system.is_explored_by(ship.owner_id):
+                        target_system.explore(ship.owner_id)
+                        empire = next((e for e in self.empires if e.id == ship.owner_id), None)
+                        if empire:
+                            empire.explore_system(ship.target_system_id)
+                        explored_systems.add(ship.target_system_id)
+                        print(f"✓ {target_system.name} odkryty!")
+
+                # Sprawdź kolonizację (tylko dla statków kolonistów)
+                if ship.ship_type == ShipType.COLONY_SHIP:
+                    result = self._try_colonize(ship)
+                    if result:  # Jeśli kolonizacja się powiodła
+                        ships_to_remove.append(ship)
+                else:
+                    # Dla innych statków wyczyść cel po dotarciu
+                    ship.target_system_id = None
+
+        # Usuń statki po iteracji
+        for ship in ships_to_remove:
+            self.ships.remove(ship)
+            if ship in self.selected_ships:
+                self.selected_ships.remove(ship)
+
+        # 2. Wzrost populacji i produkcja na planetach
         for system in self.galaxy.systems:
             for planet in system.planets:
                 if planet.is_colonized:
@@ -401,17 +432,38 @@ class Game:
                         self.next_ship_id += 1
                         print(f"✓ {new_ship.name} wyprodukowany w systemie {system.name}!")
 
+        # 3. Aktualizacja zasobów imperii
+        self._update_empire_resources()
+
+    def _update_empire_resources(self):
+        """Aktualizuj całkowite zasoby wszystkich imperiów"""
+        for empire in self.empires:
+            total_prod = 0.0
+            total_sci = 0.0
+
+            # Sumuj z wszystkich planet
+            for system in self.galaxy.systems:
+                for planet in system.planets:
+                    if planet.owner_id == empire.id:
+                        total_prod += planet.calculate_production()
+                        total_sci += planet.calculate_science()
+
+            empire.total_production = total_prod
+            empire.total_science = total_sci
+
     def render(self):
         """Renderuj grę"""
         self.renderer.clear()
         self.renderer.draw_background()
 
+        # Przygotuj kolory imperiów
+        empire_colors = {empire.id: empire.color for empire in self.empires}
+
         # Rysuj galaktykę
         if self.galaxy:
-            self.renderer.draw_galaxy(self.galaxy, self.player_empire.id)
+            self.renderer.draw_galaxy(self.galaxy, self.player_empire.id, empire_colors)
 
         # Rysuj statki
-        empire_colors = {empire.id: empire.color for empire in self.empires}
         self.renderer.draw_ships(self.ships, empire_colors, self.selected_ships)
 
         # Podświetl wybrany system
@@ -443,6 +495,17 @@ class Game:
 
         y_offset += 30
         draw_text(self.screen, f"Imperium: {self.player_empire.name}",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, Colors.UI_TEXT)
+
+        # Zasoby imperium
+        y_offset += 25
+        draw_text(self.screen, f"Produkcja: {self.player_empire.total_production:.1f}/tura",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, Colors.UI_TEXT)
+
+        y_offset += 20
+        draw_text(self.screen, f"Nauka: {self.player_empire.total_science:.1f}/tura",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, Colors.UI_TEXT)
 
@@ -491,14 +554,46 @@ class Game:
                      self.renderer.font_small, Colors.UI_TEXT)
 
             # Lista planet
+            y_offset += 10
             for i, planet in enumerate(self.selected_system.planets):
-                y_offset += 25
-                planet_info = f"  {planet.name}"
+                y_offset += 22
+
+                # Ikona planety (kolorowe kółko)
+                planet_icon_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 5
+                planet_icon_y = y_offset + 7
+                pygame.draw.circle(self.screen, planet.color, (planet_icon_x, planet_icon_y), 4)
+
+                # Informacje o planecie
+                planet_info = f"{chr(65 + i)}: {planet.planet_type.value[:3]}"  # A: Zie (skrót)
+
                 if planet.is_colonized:
-                    planet_info += f" (Pop: {int(planet.population)})"
+                    if planet.owner_id == self.player_empire.id:
+                        planet_info += f" | Twoja"
+                    else:
+                        owner = next((e for e in self.empires if e.id == planet.owner_id), None)
+                        if owner:
+                            planet_info += f" | {owner.name[:10]}"
+                    planet_info += f" (Pop:{int(planet.population)})"
+                else:
+                    planet_info += f" | Wolna"
+
+                # Kolor tekstu
+                text_color = Colors.UI_TEXT
+                if planet.is_colonized and planet.owner_id == self.player_empire.id:
+                    text_color = Colors.PLAYER
+
                 draw_text(self.screen, planet_info,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_offset,
+                         self.renderer.font_small, text_color)
+
+            # Podpowiedź o zarządzaniu planetami
+            player_planets = self.selected_system.get_colonized_planets(self.player_empire.id)
+            if player_planets:
+                y_offset += 30
+                hint = f"P lub 1-{len(player_planets)} - zarządzaj planetą"
+                draw_text(self.screen, hint,
                          WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
-                         self.renderer.font_small, Colors.UI_TEXT)
+                         self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Przycisk zakończenia tury
         self.end_turn_button.draw(self.screen, self.renderer.font_medium)
