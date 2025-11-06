@@ -50,6 +50,7 @@ class Game:
         self.planet_screen: Optional[PlanetScreen] = None  # Ekran szczegółów planety
         self.research_screen: Optional[ResearchScreen] = None  # Ekran badań
         self.info_panel: Optional[Panel] = None
+        self.show_help = False  # Czy pokazywać pełną pomoc (toggle H)
         self.setup_ui()
 
         # Input
@@ -251,6 +252,10 @@ class Game:
         # C - kolonizuj planetę (jeśli wybrano statek kolonistów)
         elif key == pygame.K_c:
             self._handle_colonize_command()
+
+        # H - toggle pomoc/instrukcje
+        elif key == pygame.K_h:
+            self.show_help = not self.show_help
 
         # R - otwórz ekran badań
         elif key == pygame.K_r:
@@ -1009,38 +1014,44 @@ class Game:
         # Przycisk zakończenia tury
         self.end_turn_button.draw(self.screen, self.renderer.font_medium)
 
-        # Instrukcje
-        y_bottom = WINDOW_HEIGHT - 145
-        draw_text(self.screen, "Sterowanie:",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 130,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "WSAD/Strzałki - ruch",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 115,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "PPM przeciągnij - ruch mapy",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 100,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "Scroll - zoom",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 85,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "LPM - wybierz statek/system",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 70,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "Shift+LPM - dodaj do wyboru",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 55,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "PPM klik - rozkaz ruchu",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 40,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "C - kolonizuj (statek kolonistów)",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 25,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "R - badania technologii",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 10,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "P - zarządzaj planetą",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom + 5,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "Spacja - zakończ turę",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom + 20,
-                 self.renderer.font_small, Colors.LIGHT_GRAY)
+        # === SEKCJA 5: INSTRUKCJE (na samym dole) ===
+        y_bottom = WINDOW_HEIGHT - 80
+
+        if self.show_help:
+            # Pełna lista instrukcji (gdy gracz nacisnął H)
+            separator_y = y_bottom - 15
+            pygame.draw.line(self.screen, Colors.UI_BORDER,
+                           (WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, separator_y),
+                           (WINDOW_WIDTH - PANEL_PADDING, separator_y), 1)
+
+            y_help = y_bottom - 145
+            draw_text(self.screen, "═══ STEROWANIE ═══",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_help,
+                     self.renderer.font_small, Colors.UI_HIGHLIGHT)
+
+            instructions = [
+                ("WSAD/Strzałki", "ruch kamery"),
+                ("PPM przeciągnij", "ruch mapy"),
+                ("Scroll", "zoom"),
+                ("LPM", "wybierz statek/system"),
+                ("Shift+LPM", "dodaj do wyboru"),
+                ("PPM klik", "rozkaz ruchu"),
+                ("C", "kolonizuj planetę"),
+                ("P", "zarządzaj planetą"),
+                ("R", "badania"),
+                ("Spacja", "zakończ turę"),
+                ("H", "ukryj pomoc"),
+            ]
+
+            y_help += 20
+            for key, desc in instructions:
+                text = f"{key:14} - {desc}"
+                draw_text(self.screen, text,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 5, y_help,
+                         self.renderer.font_small, Colors.LIGHT_GRAY)
+                y_help += 15
+        else:
+            # Tylko krótka podpowiedź
+            draw_text(self.screen, "H - pokaż pomoc • Spacja - następna tura",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom,
+                     self.renderer.font_small, Colors.LIGHT_GRAY)
