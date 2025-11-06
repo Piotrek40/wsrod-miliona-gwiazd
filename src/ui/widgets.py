@@ -20,9 +20,14 @@ class Button:
     hover_color: tuple = Colors.UI_HIGHLIGHT
     text_color: tuple = Colors.UI_TEXT
     is_hovered: bool = False
+    enabled: bool = True  # Czy przycisk jest aktywny
 
     def update(self, mouse_pos: tuple[int, int]):
         """Sprawdź czy mysz jest nad przyciskiem"""
+        if not self.enabled:
+            self.is_hovered = False
+            return
+
         mx, my = mouse_pos
         self.is_hovered = (
             self.x <= mx <= self.x + self.width and
@@ -31,6 +36,9 @@ class Button:
 
     def handle_click(self, mouse_pos: tuple[int, int]) -> bool:
         """Obsłuż kliknięcie, zwróć True jeśli kliknięto"""
+        if not self.enabled:
+            return False
+
         if self.is_hovered and self.callback:
             self.callback()
             return True
@@ -38,14 +46,20 @@ class Button:
 
     def draw(self, screen: pygame.Surface, font: pygame.font.Font):
         """Rysuj przycisk"""
-        color = self.hover_color if self.is_hovered else self.color
+        if not self.enabled:
+            # Przycisk wyłączony - ciemny szary
+            color = (60, 60, 60)
+            text_color = (100, 100, 100)
+        else:
+            color = self.hover_color if self.is_hovered else self.color
+            text_color = self.text_color
 
         # Prostokąt przycisku
         pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
         pygame.draw.rect(screen, Colors.UI_BORDER, (self.x, self.y, self.width, self.height), 2)
 
         # Tekst
-        text_surface = font.render(self.text, True, self.text_color)
+        text_surface = font.render(self.text, True, text_color)
         text_rect = text_surface.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
         screen.blit(text_surface, text_rect)
 
