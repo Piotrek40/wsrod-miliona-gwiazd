@@ -4,6 +4,7 @@ Generator tła z gwiazdkami (starfield)
 import random
 import pygame
 from src.config import Colors
+from src.graphics.nebula import NebulaGenerator
 
 
 class Star:
@@ -31,6 +32,11 @@ class Starfield:
 
         # Wygeneruj gwiazdki w 3 warstwach
         self._generate_stars(num_stars)
+
+        # Generuj mgławice (ładne kolorowe chmury w tle!)
+        print("Generowanie mgławic... (może chwilę potrwać)")
+        self.nebula_layer = NebulaGenerator.create_nebula_layer(width, height, num_nebulae=3)
+        print("✓ Mgławice wygenerowane!")
 
         # Cache dla surface (dla wydajności)
         self.background_surface = None
@@ -137,6 +143,13 @@ class Starfield:
         Layer 2 (bliskie): 60% ruchu kamery
         """
         screen.fill(Colors.BLACK)
+
+        # Rysuj mgławice (bardzo daleko, prawie statyczne - 5% parallax)
+        nebula_offset_x = -camera.x * 0.05
+        nebula_offset_y = -camera.y * 0.05
+        nebula_x = int(nebula_offset_x % self.width)
+        nebula_y = int(nebula_offset_y % self.height)
+        screen.blit(self.nebula_layer, (nebula_x, nebula_y), special_flags=pygame.BLEND_ADD)
 
         parallax_factors = {0: 0.1, 1: 0.3, 2: 0.6}
 
