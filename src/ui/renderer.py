@@ -9,6 +9,7 @@ from src.models.ship import Ship
 from src.ui.camera import Camera
 from src.config import Colors, WINDOW_WIDTH, WINDOW_HEIGHT, BACKGROUND_STARS
 from src.graphics.starfield import Starfield
+from src.graphics.planet_renderer import PlanetRenderer, get_planet_render_flags
 
 
 class Renderer:
@@ -89,7 +90,7 @@ class Renderer:
         self.draw_planets(system, screen_x, screen_y, empire_colors)
 
     def draw_planets(self, system: StarSystem, center_x: float, center_y: float, empire_colors: dict[int, tuple]):
-        """Rysuj planety w systemie - WIDOCZNE ZAWSZE"""
+        """Rysuj planety w systemie - WIDOCZNE ZAWSZE (NOWA WERSJA z gradientami!)"""
         for planet in system.planets:
             # Pozycja planety względem gwiazdy (mniejsza orbita dla lepszej widoczności)
             orbit_scale = 0.4 if self.camera.zoom < 1.0 else 1.0
@@ -100,13 +101,25 @@ class Renderer:
             base_size = 4 if self.camera.zoom < 1.0 else planet.size
             planet_radius = max(3, int(base_size * self.camera.zoom / 2))
 
-            # Rysuj planetę
-            pygame.draw.circle(self.screen, planet.color, (int(planet_screen_x), int(planet_screen_y)), planet_radius)
+            # === NOWY RENDERER z gradientami i efektami! ===
+            has_atmosphere, has_rings = get_planet_render_flags(planet.planet_type)
+
+            PlanetRenderer.draw_planet_advanced(
+                self.screen,
+                int(planet_screen_x),
+                int(planet_screen_y),
+                planet_radius,
+                planet.planet_type,
+                planet.color,
+                has_atmosphere=has_atmosphere,
+                has_rings=has_rings
+            )
 
             # Jeśli skolonizowana, rysuj obramowanie kolorem właściciela
             if planet.is_colonized:
                 owner_color = empire_colors.get(planet.owner_id, Colors.WHITE)
-                pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 2, 2)
+                # Grubsze obramowanie, żeby było widoczne przez glow
+                pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 3, 2)
 
     def draw_unexplored_system(self, system: StarSystem):
         """Rysuj nieodkryty system (mgła wojny) - WIDOCZNY!"""
