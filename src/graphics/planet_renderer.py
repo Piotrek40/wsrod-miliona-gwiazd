@@ -58,43 +58,44 @@ class PlanetRenderer:
 
     @staticmethod
     def _draw_glow(screen, x, y, radius, color):
-        """Rysuj glow effect wokół planety"""
-        # 3 warstwy glow o różnej intensywności
+        """Rysuj glow effect wokół planety (WZMOCNIONY dla lepszej widoczności!)"""
+        # 4 warstwy glow o różnej intensywności - WIĘKSZE i JAŚNIEJSZE
         glow_layers = [
-            (radius + 4, 15),  # Najbliżej, najjaśniejszy
-            (radius + 7, 8),   # Środek
-            (radius + 10, 4),  # Najdalej, najciemniejszy
+            (radius + 2, 40),   # Bardzo blisko, bardzo jasny
+            (radius + 5, 25),   # Blisko, jasny
+            (radius + 9, 15),   # Środek
+            (radius + 14, 8),   # Daleko, delikatny
         ]
 
         for glow_radius, alpha in glow_layers:
-            if glow_radius < radius:
+            if glow_radius <= radius:
                 continue
 
-            # Kolor glow to przygaszony kolor planety
-            glow_color = tuple(int(c * 0.6) for c in color[:3])
+            # Kolor glow - jaśniejszy niż wcześniej (0.8 zamiast 0.6)
+            glow_color = tuple(int(c * 0.8) for c in color[:3])
 
             # Rysuj z alpha blending (wymaga surface z alpha)
-            glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surface, (*glow_color, alpha), (glow_radius, glow_radius), glow_radius)
+            glow_surface = pygame.Surface((glow_radius * 2 + 4, glow_radius * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surface, (*glow_color, alpha), (glow_radius + 2, glow_radius + 2), glow_radius)
 
-            screen.blit(glow_surface, (x - glow_radius, y - glow_radius), special_flags=pygame.BLEND_ALPHA_SDL2)
+            screen.blit(glow_surface, (x - glow_radius - 2, y - glow_radius - 2), special_flags=pygame.BLEND_ALPHA_SDL2)
 
     @staticmethod
     def _draw_atmosphere(screen, x, y, radius):
-        """Rysuj atmosferę (niebieski halo dla ziemiopodobnych)"""
-        atmo_radius = radius + 2
-        atmo_color = (100, 150, 255)  # Niebieski
+        """Rysuj atmosferę (niebieski halo dla ziemiopodobnych) - WZMOCNIONA!"""
+        atmo_radius = radius + 3
+        atmo_color = (120, 180, 255)  # Jaśniejszy niebieski
 
-        # 2 warstwy atmosfery
-        for offset, alpha in [(2, 30), (3, 15)]:
-            atmo_surface = pygame.Surface((atmo_radius * 2 + offset, atmo_radius * 2 + offset), pygame.SRCALPHA)
+        # 3 warstwy atmosfery - JAŚNIEJSZE
+        for offset, alpha in [(2, 50), (4, 30), (6, 15)]:
+            atmo_surface = pygame.Surface((atmo_radius * 2 + offset + 2, atmo_radius * 2 + offset + 2), pygame.SRCALPHA)
             pygame.draw.circle(
                 atmo_surface,
                 (*atmo_color, alpha),
-                (atmo_radius + offset // 2, atmo_radius + offset // 2),
+                (atmo_radius + offset // 2 + 1, atmo_radius + offset // 2 + 1),
                 atmo_radius + offset // 2
             )
-            screen.blit(atmo_surface, (x - atmo_radius - offset // 2, y - atmo_radius - offset // 2), special_flags=pygame.BLEND_ALPHA_SDL2)
+            screen.blit(atmo_surface, (x - atmo_radius - offset // 2 - 1, y - atmo_radius - offset // 2 - 1), special_flags=pygame.BLEND_ALPHA_SDL2)
 
     @staticmethod
     def _draw_planet_sphere(screen, x, y, radius, color):
@@ -148,20 +149,20 @@ class PlanetRenderer:
 
     @staticmethod
     def _draw_highlight(screen, x, y, radius):
-        """Rysuj highlight (pseudo-światło od góry-lewej)"""
-        if radius < 4:
+        """Rysuj highlight (pseudo-światło od góry-lewej) - JAŚNIEJSZY!"""
+        if radius < 3:
             return
 
         # Pozycja highlight (przesunięta w górę-lewo)
-        highlight_x = x - int(radius * 0.3)
-        highlight_y = y - int(radius * 0.3)
-        highlight_radius = max(2, int(radius * 0.3))
+        highlight_x = x - int(radius * 0.35)
+        highlight_y = y - int(radius * 0.35)
+        highlight_radius = max(2, int(radius * 0.4))  # Większy highlight
 
-        # Biały highlight z alpha
-        highlight_surface = pygame.Surface((highlight_radius * 2, highlight_radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(highlight_surface, (255, 255, 255, 80), (highlight_radius, highlight_radius), highlight_radius)
+        # Biały highlight z alpha - JAŚNIEJSZY (120 zamiast 80)
+        highlight_surface = pygame.Surface((highlight_radius * 2 + 2, highlight_radius * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(highlight_surface, (255, 255, 255, 120), (highlight_radius + 1, highlight_radius + 1), highlight_radius)
 
-        screen.blit(highlight_surface, (highlight_x - highlight_radius, highlight_y - highlight_radius), special_flags=pygame.BLEND_ALPHA_SDL2)
+        screen.blit(highlight_surface, (highlight_x - highlight_radius - 1, highlight_y - highlight_radius - 1), special_flags=pygame.BLEND_ALPHA_SDL2)
 
 
 def get_planet_render_flags(planet_type: PlanetType) -> tuple[bool, bool]:
