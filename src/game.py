@@ -13,7 +13,7 @@ from src.ui.screens.planet_screen import PlanetScreen
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
-    PANEL_PADDING
+    PANEL_PADDING, COLONIZABLE_PLANET_TYPES
 )
 
 
@@ -226,6 +226,10 @@ class Game:
             planet_index = key - pygame.K_1
             self._open_planet_screen(planet_index)
 
+        # C - kolonizuj planetę (jeśli wybrano statek kolonistów)
+        elif key == pygame.K_c:
+            self._handle_colonize_command()
+
         # Escape - wyjście lub zamknij ekran planety
         elif key == pygame.K_ESCAPE:
             if self.planet_screen:
@@ -359,21 +363,74 @@ class Game:
         if not target_system.is_explored_by(colony_ship.owner_id):
             target_system.explore(colony_ship.owner_id)
 
-        # Znajdź pierwszą nieskolonizowaną planetę
-        free_planets = target_system.get_free_planets()
-        if not free_planets:
-            print(f"Brak wolnych planet w systemie {target_system.name}")
+        # Znajdź KOLONIZOWALNE planety (filtrowane po typie - NIE gazowe olbrzymy!)
+        colonizable_planets = target_system.get_colonizable_planets(COLONIZABLE_PLANET_TYPES)
+
+        if not colonizable_planets:
+            # Sprawdź czy są jakieś wolne planety (dla komunikatu)
+            free_planets = target_system.get_free_planets()
+            if free_planets:
+                planet_types = ", ".join([p.planet_type.value for p in free_planets])
+                print(f"⚠ {target_system.name}: Brak planet nadających się do kolonizacji!")
+                print(f"  Dostępne planety: {planet_types}")
+                print(f"  (Wymagana technologia do kolonizacji tych typów)")
+            else:
+                print(f"⚠ {target_system.name}: Wszystkie planety już skolonizowane")
+
             colony_ship.target_system_id = None  # Wyczyść cel
             return False
 
-        # Skolonizuj pierwszą wolną planetę
-        planet = free_planets[0]
+        # Skolonizuj pierwszą NADAJĄCĄ SIĘ planetę
+        planet = colonizable_planets[0]
         planet.colonize(colony_ship.owner_id, initial_population=10.0)
 
-        print(f"✓ {planet.name} skolonizowana przez {self.empires[colony_ship.owner_id].name}!")
+        print(f"✓ {planet.name} ({planet.planet_type.value}) skolonizowana przez {self.empires[colony_ship.owner_id].name}!")
 
         # Zwróć True - statek zostanie usunięty przez wywołującego
         return True
+
+    def _handle_colonize_command(self):
+        """Obsługa komendy kolonizacji (klawisz C)"""
+        # Sprawdź czy wybrano dokładnie jeden statek
+        if len(self.selected_ships) != 1:
+            print("⚠ Wybierz dokładnie jeden statek kolonistów aby kolonizować")
+            return
+
+        colony_ship = self.selected_ships[0]
+
+        # Sprawdź czy to statek kolonistów
+        if colony_ship.ship_type != ShipType.COLONY_SHIP:
+            print(f"⚠ {colony_ship.ship_type.value} nie może kolonizować planet!")
+            print("  Wybierz statek kolonistów.")
+            return
+
+        # Sprawdź czy statek jest w systemie
+        if colony_ship.target_system_id is None:
+            print("⚠ Statek kolonistów nie jest w żadnym systemie!")
+            print("  Wyślij go do systemu który chcesz skolonizować (PPM na system)")
+            return
+
+        # Znajdź system w którym jest statek
+        target_system = self.galaxy.find_system_by_id(colony_ship.target_system_id)
+        if not target_system:
+            print("⚠ Nie można znaleźć systemu docelowego")
+            return
+
+        # Sprawdź czy statek dotarł do celu (nie jest w ruchu)
+        if colony_ship.is_moving:
+            print(f"⚠ Statek kolonistów jest w drodze do {target_system.name}")
+            print("  Poczekaj aż dotrze na miejsce")
+            return
+
+        # Spróbuj skolonizować
+        print(f"\n🌍 Próba kolonizacji w systemie {target_system.name}...")
+        result = self._try_colonize(colony_ship)
+
+        if result:
+            # Kolonizacja udana - usuń statek
+            self.ships.remove(colony_ship)
+            self.selected_ships.remove(colony_ship)
+            print("  Statek kolonistów został wykorzystany do kolonizacji")
 
     def _handle_right_click(self, mouse_pos):
         """Obsługa prawego kliknięcia - wydawanie rozkazów"""
@@ -432,13 +489,9 @@ class Game:
                         explored_systems.add(ship.target_system_id)
                         print(f"✓ {target_system.name} odkryty!")
 
-                # Sprawdź kolonizację (tylko dla statków kolonistów)
-                if ship.ship_type == ShipType.COLONY_SHIP:
-                    result = self._try_colonize(ship)
-                    if result:  # Jeśli kolonizacja się powiodła
-                        ships_to_remove.append(ship)
-                else:
-                    # Dla innych statków wyczyść cel po dotarciu
+                # NIE auto-kolonizuj - gracz musi nacisnąć klawisz 'C'
+                # Dla statków innych niż kolonizacyjne wyczyść cel po dotarciu
+                if ship.ship_type != ShipType.COLONY_SHIP:
                     ship.target_system_id = None
 
         # Usuń statki po iteracji
@@ -588,6 +641,39 @@ class Game:
                          WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
 
+            # Hint dla statku kolonistów
+            if len(self.selected_ships) == 1 and self.selected_ships[0].ship_type == ShipType.COLONY_SHIP:
+                colony_ship = self.selected_ships[0]
+                y_offset += 30
+
+                if colony_ship.is_moving:
+                    # Statek w ruchu
+                    draw_text(self.screen, "⏳ W drodze do kolonizacji...",
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                             self.renderer.font_small, Colors.LIGHT_GRAY)
+                elif colony_ship.target_system_id is not None:
+                    # Statek dotarł do systemu
+                    target_system = self.galaxy.find_system_by_id(colony_ship.target_system_id)
+                    if target_system:
+                        colonizable = target_system.get_colonizable_planets(COLONIZABLE_PLANET_TYPES)
+                        if colonizable:
+                            draw_text(self.screen, "C - kolonizuj planetę",
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     self.renderer.font_small, Colors.UI_HIGHLIGHT)
+                            y_offset += 20
+                            draw_text(self.screen, f"  ({len(colonizable)} planet dostępnych)",
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     self.renderer.font_small, Colors.LIGHT_GRAY)
+                        else:
+                            draw_text(self.screen, "⚠ Brak planet do kolonizacji",
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     self.renderer.font_small, (200, 100, 100))
+                else:
+                    # Statek nie wysłany nigdzie
+                    draw_text(self.screen, "PPM na system - wyślij",
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                             self.renderer.font_small, Colors.LIGHT_GRAY)
+
         # Informacje o wybranym systemie
         elif self.selected_system:
             y_offset += 50
@@ -704,7 +790,7 @@ class Game:
         self.end_turn_button.draw(self.screen, self.renderer.font_medium)
 
         # Instrukcje
-        y_bottom = WINDOW_HEIGHT - 135
+        y_bottom = WINDOW_HEIGHT - 145
         draw_text(self.screen, "Sterowanie:",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 130,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
@@ -726,9 +812,12 @@ class Game:
         draw_text(self.screen, "PPM klik - rozkaz ruchu",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 40,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "P - zarządzaj planetą",
+        draw_text(self.screen, "C - kolonizuj (statek kolonistów)",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 25,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "Spacja - zakończ turę",
+        draw_text(self.screen, "P - zarządzaj planetą",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 10,
+                 self.renderer.font_small, Colors.LIGHT_GRAY)
+        draw_text(self.screen, "Spacja - zakończ turę",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom + 5,
                  self.renderer.font_small, Colors.LIGHT_GRAY)

@@ -62,6 +62,13 @@ class StarSystem:
         """Zwróć nieskolonizowane planety"""
         return [p for p in self.planets if not p.is_colonized]
 
+    def get_colonizable_planets(self, colonizable_types: list) -> list[Planet]:
+        """Zwróć nieskolonizowane planety które można kolonizować (filtrowane po typie)"""
+        return [
+            p for p in self.planets
+            if not p.is_colonized and p.planet_type in colonizable_types
+        ]
+
     @staticmethod
     def generate_random(system_id: int, x: float, y: float) -> 'StarSystem':
         """Generuj losowy system gwiezdny"""
