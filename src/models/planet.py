@@ -14,11 +14,24 @@ import random
 
 @dataclass
 class Building:
-    """Budynek na planecie"""
+    """Budynek na planecie (instancja zbudowanego budynku)"""
+    building_id: str  # ID definicji budynku z config.BUILDINGS
     name: str
+
+    # Bonusy procentowe (mnożniki)
     production_bonus: float = 0.0
     science_bonus: float = 0.0
-    defense_bonus: float = 0.0
+    food_bonus: float = 0.0
+    energy_bonus: float = 0.0
+
+    # Bonusy płaskie (dodawane bezpośrednio)
+    production_flat: float = 0.0
+    science_flat: float = 0.0
+    food_flat: float = 0.0
+    energy_flat: float = 0.0
+
+    # Koszt utrzymania
+    upkeep_energy: float = 0.0
 
 
 @dataclass
@@ -26,7 +39,7 @@ class ProductionItem:
     """Element kolejki produkcji"""
     item_type: str  # "ship" lub "building"
     ship_type: Optional[ShipType] = None
-    building_name: Optional[str] = None
+    building_id: Optional[str] = None  # ID budynku z config.BUILDINGS
     total_cost: float = 0.0
     accumulated_production: float = 0.0
 
@@ -111,10 +124,15 @@ class Planet:
         planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('production', 1.0)
         base_production *= planet_modifier
 
-        # Bonusy z budynków
+        # Bonusy procentowe z budynków
         building_bonus = sum(b.production_bonus for b in self.buildings)
+        production = base_production * (1.0 + building_bonus)
 
-        return base_production * (1.0 + building_bonus)
+        # Bonusy płaskie z budynków
+        flat_bonus = sum(b.production_flat for b in self.buildings)
+        production += flat_bonus
+
+        return production
 
     def calculate_science(self) -> float:
         """Oblicz punkty nauki na turę"""
@@ -128,10 +146,15 @@ class Planet:
         planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('science', 1.0)
         base_science *= planet_modifier
 
-        # Bonusy z budynków
+        # Bonusy procentowe z budynków
         building_bonus = sum(b.science_bonus for b in self.buildings)
+        science = base_science * (1.0 + building_bonus)
 
-        return base_science * (1.0 + building_bonus)
+        # Bonusy płaskie z budynków
+        flat_bonus = sum(b.science_flat for b in self.buildings)
+        science += flat_bonus
+
+        return science
 
     def calculate_food(self) -> float:
         """Oblicz produkcję żywności na turę"""
@@ -145,10 +168,15 @@ class Planet:
         planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('food', 1.0)
         base_food *= planet_modifier
 
-        # TODO: Bonusy z budynków (farmy)
-        # building_bonus = sum(b.food_bonus for b in self.buildings)
+        # Bonusy procentowe z budynków (farmy!)
+        building_bonus = sum(b.food_bonus for b in self.buildings)
+        food = base_food * (1.0 + building_bonus)
 
-        return base_food
+        # Bonusy płaskie z budynków
+        flat_bonus = sum(b.food_flat for b in self.buildings)
+        food += flat_bonus
+
+        return food
 
     def calculate_energy(self) -> float:
         """Oblicz produkcję energii na turę"""
@@ -162,10 +190,15 @@ class Planet:
         planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('energy', 1.0)
         base_energy *= planet_modifier
 
-        # TODO: Bonusy z budynków (elektrownie)
-        # building_bonus = sum(b.energy_bonus for b in self.buildings)
+        # Bonusy procentowe z budynków (elektrownie!)
+        building_bonus = sum(b.energy_bonus for b in self.buildings)
+        energy = base_energy * (1.0 + building_bonus)
 
-        return base_energy
+        # Bonusy płaskie z budynków
+        flat_bonus = sum(b.energy_flat for b in self.buildings)
+        energy += flat_bonus
+
+        return energy
 
     def grow_population(self, growth_rate: float = 0.05):
         """Wzrost populacji"""
@@ -185,6 +218,19 @@ class Planet:
             total_cost=cost
         )
         self.production_queue.append(item)
+
+    def add_building_to_queue(self, building_id: str, building_cost: int):
+        """Dodaj budynek do kolejki produkcji"""
+        item = ProductionItem(
+            item_type="building",
+            building_id=building_id,
+            total_cost=building_cost
+        )
+        self.production_queue.append(item)
+
+    def add_building(self, building: Building):
+        """Dodaj ukończony budynek do planety"""
+        self.buildings.append(building)
 
     def process_production(self) -> Optional[ProductionItem]:
         """Przetwórz produkcję na turę. Zwraca ukończony element jeśli jest."""
