@@ -102,10 +102,24 @@ class Game:
                 empire.explore_system(home_system.id)
                 home_system.explore(empire.id)
 
-                # Skolonizuj pierwszą planetę
-                if home_system.planets:
-                    home_planet = home_system.planets[0]
+                # Skolonizuj pierwszą ODPOWIEDNIĄ planetę (NIE gazowy olbrzym!)
+                # Znajdź pierwszą planetę która nadaje się do kolonizacji
+                colonizable_planets = [p for p in home_system.planets
+                                       if p.planet_type in COLONIZABLE_PLANET_TYPES]
+
+                if colonizable_planets:
+                    home_planet = colonizable_planets[0]
                     home_planet.colonize(empire.id, initial_population=50.0)
+                    if empire.is_player:
+                        print(f"✓ Start: {home_planet.name} ({home_planet.planet_type.value})")
+                elif home_system.planets:
+                    # Ostatnia deska ratunku - weź pierwszą planetę i zmień jej typ
+                    home_planet = home_system.planets[0]
+                    from src.config import PlanetType
+                    home_planet.planet_type = PlanetType.EARTH_LIKE  # Wymuś ziemiopodobną
+                    home_planet.colonize(empire.id, initial_population=50.0)
+                    if empire.is_player:
+                        print(f"⚠️ System macierzysty nie miał dobrych planet - przekształcono pierwszą")
 
                 # Stwórz początkowe statki
                 self._create_starting_ships(empire, home_system)
@@ -718,37 +732,33 @@ class Game:
         # Panel informacyjny
         self.info_panel.draw(self.screen, self.renderer.font_medium)
 
-        # Informacje o turze
-        y_offset = 50
+        # === SEKCJA 1: HEADER (Tura, Imperium) ===
+        y_header = 50
         draw_text(self.screen, f"Tura: {self.current_turn}",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_header,
                  self.renderer.font_small, Colors.UI_TEXT)
 
-        y_offset += 30
         draw_text(self.screen, f"Imperium: {self.player_empire.name}",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_header + 20,
                  self.renderer.font_small, Colors.UI_TEXT)
 
-        # === ZASOBY IMPERIUM ===
-        y_offset += 30
+        # === SEKCJA 2: ZASOBY IMPERIUM ===
+        y_resources = 100
         draw_text(self.screen, "═══ Zasoby ═══",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_resources,
                  self.renderer.font_small, Colors.UI_HIGHLIGHT)
 
         # Produkcja (minerały)
-        y_offset += 22
         draw_text(self.screen, f"🔨 Produkcja: {self.player_empire.total_production:.1f}",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_resources + 22,
                  self.renderer.font_small, Colors.UI_TEXT)
 
         # Nauka
-        y_offset += 20
         draw_text(self.screen, f"🔬 Nauka: {self.player_empire.total_science:.1f}",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_resources + 42,
                  self.renderer.font_small, Colors.UI_TEXT)
 
         # Żywność (z bilansem)
-        y_offset += 20
         food_color = Colors.UI_TEXT
         if self.player_empire.has_starvation:
             food_color = (255, 100, 100)  # Czerwony przy głodzie
@@ -759,11 +769,10 @@ class Game:
         if self.player_empire.has_starvation:
             food_text += " ⚠️GŁÓD"
         draw_text(self.screen, food_text,
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_resources + 62,
                  self.renderer.font_small, food_color)
 
         # Energia (z bilansem)
-        y_offset += 20
         energy_color = Colors.UI_TEXT
         if self.player_empire.has_blackout:
             energy_color = (255, 100, 100)  # Czerwony przy blackoucie
@@ -774,31 +783,29 @@ class Game:
         if self.player_empire.has_blackout:
             energy_text += " ⚠️BRAK"
         draw_text(self.screen, energy_text,
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_resources + 82,
                  self.renderer.font_small, energy_color)
 
-        # === BADANIA ===
-        y_offset += 30
+        # === SEKCJA 3: BADANIA I EKSPLORACJA ===
+        y_research = 210
         if self.player_empire.current_research:
             current_tech = TECHNOLOGIES.get(self.player_empire.current_research)
             if current_tech:
                 draw_text(self.screen, "═══ Badania ═══",
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research,
                          self.renderer.font_small, Colors.UI_HIGHLIGHT)
 
-                y_offset += 20
                 tech_name = current_tech.name[:25]  # Obetnij długie nazwy
                 draw_text(self.screen, f"🔬 {tech_name}",
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 20,
                          self.renderer.font_small, Colors.UI_TEXT)
 
-                y_offset += 18
                 # Mini progress bar
                 progress = self.player_empire.research_progress / current_tech.cost
                 bar_width = PANEL_WIDTH - 2 * PANEL_PADDING
                 bar_height = 12
                 bar_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING
-                bar_y = y_offset
+                bar_y = y_research + 38
 
                 # Tło
                 pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height))
@@ -808,68 +815,67 @@ class Game:
                 # Obramowanie
                 pygame.draw.rect(self.screen, Colors.LIGHT_GRAY, (bar_x, bar_y, bar_width, bar_height), 1)
 
-                y_offset += 15
                 progress_text = f"  {progress*100:.0f}% ({self.player_empire.research_progress:.0f}/{current_tech.cost})"
                 draw_text(self.screen, progress_text,
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 53,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
         else:
             draw_text(self.screen, "R - badania",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research,
                      self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Statystyki eksploracji
         explored_count = len(self.player_empire.explored_systems)
         total_systems = len(self.galaxy.systems)
         unexplored = total_systems - explored_count
-        y_offset += 25
         draw_text(self.screen, f"Systemy: {explored_count}/{total_systems}",
-                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 80,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Hint o nieodkrytych systemach (na początku gry)
         if self.current_turn < 3 and unexplored > 0:
-            y_offset += 20
             hint_color = (100, 150, 200)  # Niebieski hint
             draw_text(self.screen, f"💡 {unexplored} szare kropki",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 100,
                      self.renderer.font_small, hint_color)
-            y_offset += 18
             draw_text(self.screen, "   to nieodkryte systemy!",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 118,
                      self.renderer.font_small, hint_color)
+
+        # === SEKCJA 4: GŁÓWNA (Statki/Systemy) - największa sekcja ===
+        y_main = 350
 
         # Informacje o wybranych statkach
         if self.selected_ships:
-            y_offset += 50
             draw_text(self.screen, f"Wybrane statki: {len(self.selected_ships)}",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_main,
                      self.renderer.font_small, Colors.UI_HIGHLIGHT)
 
+            y_ship = y_main + 25
             for ship in self.selected_ships[:5]:  # Pokaż max 5 statków
-                y_offset += 25
                 ship_info = f"  {ship.ship_type.value}"
                 if ship.is_moving:
                     ship_info += " (w ruchu)"
                 draw_text(self.screen, ship_info,
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                          self.renderer.font_small, Colors.UI_TEXT)
+                y_ship += 25
 
             if len(self.selected_ships) > 5:
-                y_offset += 25
                 draw_text(self.screen, f"  ...i {len(self.selected_ships) - 5} więcej",
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
+                y_ship += 25
 
             # Hint dla statku kolonistów
             if len(self.selected_ships) == 1 and self.selected_ships[0].ship_type == ShipType.COLONY_SHIP:
                 colony_ship = self.selected_ships[0]
-                y_offset += 30
+                y_ship += 5
 
                 if colony_ship.is_moving:
                     # Statek w ruchu
                     draw_text(self.screen, "⏳ W drodze do kolonizacji...",
-                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                              self.renderer.font_small, Colors.LIGHT_GRAY)
                 elif colony_ship.target_system_id is not None:
                     # Statek dotarł do systemu
@@ -878,52 +884,45 @@ class Game:
                         colonizable = target_system.get_colonizable_planets(COLONIZABLE_PLANET_TYPES)
                         if colonizable:
                             draw_text(self.screen, "C - kolonizuj planetę",
-                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                                      self.renderer.font_small, Colors.UI_HIGHLIGHT)
-                            y_offset += 20
                             draw_text(self.screen, f"  ({len(colonizable)} planet dostępnych)",
-                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship + 20,
                                      self.renderer.font_small, Colors.LIGHT_GRAY)
                         else:
                             draw_text(self.screen, "⚠ Brak planet do kolonizacji",
-                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                                      self.renderer.font_small, (200, 100, 100))
                 else:
                     # Statek nie wysłany nigdzie
                     draw_text(self.screen, "PPM na system - wyślij",
-                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_ship,
                              self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Informacje o wybranym systemie
         elif self.selected_system:
-            y_offset += 50
             draw_text(self.screen, "Wybrany system:",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_main,
                      self.renderer.font_small, Colors.UI_HIGHLIGHT)
 
-            y_offset += 25
             draw_text(self.screen, self.selected_system.name,
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_main + 25,
                      self.renderer.font_small, Colors.WHITE)
 
-            y_offset += 25
             draw_text(self.screen, f"Typ: {self.selected_system.star_type.value}",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_main + 45,
                      self.renderer.font_small, Colors.UI_TEXT)
 
-            y_offset += 25
             draw_text(self.screen, f"Planet: {len(self.selected_system.planets)}",
-                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_main + 65,
                      self.renderer.font_small, Colors.UI_TEXT)
 
-            # Lista planet
-            y_offset += 10
-            for i, planet in enumerate(self.selected_system.planets):
-                y_offset += 22
-
+            # Lista planet (max 4 żeby zmieścić)
+            y_planet = y_main + 85
+            for i, planet in enumerate(self.selected_system.planets[:4]):
                 # Ikona planety (kolorowe kółko)
                 planet_icon_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 5
-                planet_icon_y = y_offset + 7
+                planet_icon_y = y_planet + 7
                 pygame.draw.circle(self.screen, planet.color, (planet_icon_x, planet_icon_y), 4)
 
                 # Informacje o planecie
@@ -946,35 +945,36 @@ class Game:
                     text_color = Colors.PLAYER
 
                 draw_text(self.screen, planet_info,
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_planet,
                          self.renderer.font_small, text_color)
+                y_planet += 20
 
             # Podpowiedź o zarządzaniu planetami
             player_planets = self.selected_system.get_colonized_planets(self.player_empire.id)
             if player_planets:
-                y_offset += 30
+                y_planet += 5
                 hint = f"P lub 1-{len(player_planets)} - zarządzaj planetą"
                 draw_text(self.screen, hint,
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_planet,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
+                y_planet += 20
 
-            # Lista statków gracza w tym systemie
-            y_offset += 30
+            # Lista statków gracza w tym systemie (max 3)
             system_ships = [s for s in self.ships if s.owner_id == self.player_empire.id and
                            abs(s.x - self.selected_system.x) < 50 and
                            abs(s.y - self.selected_system.y) < 50]
 
             if system_ships:
+                y_planet += 5
                 draw_text(self.screen, f"Twoje statki ({len(system_ships)}):",
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_planet,
                          self.renderer.font_small, Colors.UI_HIGHLIGHT)
+                y_planet += 20
 
-                for i, ship in enumerate(system_ships[:5]):  # Max 5
-                    y_offset += 22
-
+                for i, ship in enumerate(system_ships[:3]):  # Max 3 żeby zmieścić
                     # Ikona statku (trójkąt)
                     ship_icon_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 5
-                    ship_icon_y = y_offset + 7
+                    ship_icon_y = y_planet + 7
                     points = [
                         (ship_icon_x, ship_icon_y - 4),
                         (ship_icon_x - 3, ship_icon_y + 3),
@@ -991,19 +991,19 @@ class Game:
                     text_color = Colors.WHITE if ship in self.selected_ships else Colors.UI_TEXT
 
                     draw_text(self.screen, ship_info,
-                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_offset,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_planet,
                              self.renderer.font_small, text_color)
+                    y_planet += 20
 
-                if len(system_ships) > 5:
-                    y_offset += 20
-                    draw_text(self.screen, f"  ...i {len(system_ships) - 5} więcej",
-                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                if len(system_ships) > 3:
+                    draw_text(self.screen, f"  ...i {len(system_ships) - 3} więcej",
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_planet,
                              self.renderer.font_small, Colors.LIGHT_GRAY)
+                    y_planet += 18
 
                 # Podpowiedź
-                y_offset += 25
                 draw_text(self.screen, "Shift+LPM - wybierz następny",
-                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_planet,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Przycisk zakończenia tury
