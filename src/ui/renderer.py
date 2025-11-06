@@ -147,10 +147,46 @@ class Renderer:
         if selected_ships is None:
             selected_ships = []
 
+        # Grupuj statki według pozycji (dla licznika stackowanych statków)
+        from collections import defaultdict
+        ship_counts = defaultdict(list)
+
         for ship in ships:
             empire_color = empires.get(ship.owner_id, Colors.WHITE)
             is_selected = ship in selected_ships
             self.draw_ship(ship, empire_color, is_selected)
+
+            # Grupuj statki według pozycji (zaokrąglone do 10 jednostek)
+            location_key = (round(ship.x / 10) * 10, round(ship.y / 10) * 10, ship.owner_id)
+            ship_counts[location_key].append(ship)
+
+        # Rysuj liczniki dla stackowanych statków (gdy 2+)
+        for location_key, ships_at_location in ship_counts.items():
+            if len(ships_at_location) >= 2:
+                # Użyj pozycji pierwszego statku
+                ship = ships_at_location[0]
+                screen_x, screen_y = self.camera.world_to_screen(ship.x, ship.y)
+
+                if not self._is_visible(screen_x, screen_y):
+                    continue
+
+                # Rysuj badge z licznikiem
+                count_text = str(len(ships_at_location))
+                empire_color = empires.get(ship.owner_id, Colors.WHITE)
+
+                # Pozycja badge (prawy górny róg statku)
+                badge_x = int(screen_x + 8 * self.camera.zoom)
+                badge_y = int(screen_y - 8 * self.camera.zoom)
+
+                # Tło badge (ciemnoszare kółko)
+                badge_radius = 8
+                pygame.draw.circle(self.screen, (40, 40, 40), (badge_x, badge_y), badge_radius)
+                pygame.draw.circle(self.screen, empire_color, (badge_x, badge_y), badge_radius, 1)
+
+                # Tekst z liczbą
+                count_surface = self.font_small.render(count_text, True, Colors.WHITE)
+                count_rect = count_surface.get_rect(center=(badge_x, badge_y))
+                self.screen.blit(count_surface, count_rect)
 
     def highlight_system(self, system: StarSystem):
         """Podświetl wybrany system"""

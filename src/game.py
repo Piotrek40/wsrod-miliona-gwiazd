@@ -278,17 +278,41 @@ class Game:
         world_x, world_y = self.renderer.camera.screen_to_world(mouse_pos[0], mouse_pos[1])
 
         # Najpierw sprawdź czy kliknięto statek gracza
-        clicked_ship = self._find_ship_at(world_x, world_y, self.player_empire.id)
-        if clicked_ship:
-            # Sprawdź czy shift jest wciśnięty (wielokrotny wybór)
+        ships_at_location = self._find_all_ships_at(world_x, world_y, self.player_empire.id)
+
+        if ships_at_location:
             keys = pygame.key.get_pressed()
+
+            # Shift+Click = cykliczny wybór z nakładających się statków
             if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-                if clicked_ship in self.selected_ships:
-                    self.selected_ships.remove(clicked_ship)
+                # Jeśli mamy wiele statków w tym miejscu, wybierz następny
+                if len(ships_at_location) > 1:
+                    # Znajdź który statek jest obecnie wybrany (jeśli jakiś)
+                    current_index = -1
+                    for i, ship in enumerate(ships_at_location):
+                        if ship in self.selected_ships:
+                            current_index = i
+                            break
+
+                    # Wybierz następny (cyklicznie)
+                    next_index = (current_index + 1) % len(ships_at_location)
+                    clicked_ship = ships_at_location[next_index]
+
+                    # Toggle: jeśli był wybrany, odznacz; jeśli nie, zaznacz
+                    if clicked_ship in self.selected_ships:
+                        self.selected_ships.remove(clicked_ship)
+                    else:
+                        self.selected_ships = [clicked_ship]
                 else:
-                    self.selected_ships.append(clicked_ship)
+                    # Tylko jeden statek - normalny toggle
+                    clicked_ship = ships_at_location[0]
+                    if clicked_ship in self.selected_ships:
+                        self.selected_ships.remove(clicked_ship)
+                    else:
+                        self.selected_ships.append(clicked_ship)
             else:
-                self.selected_ships = [clicked_ship]
+                # Normalny click - wybierz pierwszy statek
+                self.selected_ships = [ships_at_location[0]]
             return
 
         # Jeśli nie kliknięto statku, sprawdź systemy
@@ -311,6 +335,18 @@ class Game:
             if distance <= tolerance / self.renderer.camera.zoom:
                 return ship
         return None
+
+    def _find_all_ships_at(self, world_x: float, world_y: float, empire_id: int, tolerance: float = 15) -> list[Ship]:
+        """Znajdź WSZYSTKIE statki w danej pozycji (dla nakładających się)"""
+        import math
+        found_ships = []
+        for ship in self.ships:
+            if ship.owner_id != empire_id:
+                continue
+            distance = math.sqrt((ship.x - world_x)**2 + (ship.y - world_y)**2)
+            if distance <= tolerance / self.renderer.camera.zoom:
+                found_ships.append(ship)
+        return found_ships
 
     def _try_colonize(self, colony_ship: Ship) -> bool:
         """Spróbuj skolonizować planetę statkiem kolonistów. Zwraca True jeśli się powiodło."""
@@ -613,6 +649,54 @@ class Game:
                 y_offset += 30
                 hint = f"P lub 1-{len(player_planets)} - zarządzaj planetą"
                 draw_text(self.screen, hint,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         self.renderer.font_small, Colors.LIGHT_GRAY)
+
+            # Lista statków gracza w tym systemie
+            y_offset += 30
+            system_ships = [s for s in self.ships if s.owner_id == self.player_empire.id and
+                           abs(s.x - self.selected_system.x) < 50 and
+                           abs(s.y - self.selected_system.y) < 50]
+
+            if system_ships:
+                draw_text(self.screen, f"Twoje statki ({len(system_ships)}):",
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         self.renderer.font_small, Colors.UI_HIGHLIGHT)
+
+                for i, ship in enumerate(system_ships[:5]):  # Max 5
+                    y_offset += 22
+
+                    # Ikona statku (trójkąt)
+                    ship_icon_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 5
+                    ship_icon_y = y_offset + 7
+                    points = [
+                        (ship_icon_x, ship_icon_y - 4),
+                        (ship_icon_x - 3, ship_icon_y + 3),
+                        (ship_icon_x + 3, ship_icon_y + 3)
+                    ]
+                    pygame.draw.polygon(self.screen, Colors.PLAYER, points)
+
+                    # Info
+                    ship_info = f"{i+1}: {ship.ship_type.value[:10]}"
+                    if ship.is_moving:
+                        ship_info += " →"
+
+                    # Kolor (biały jeśli wybrany)
+                    text_color = Colors.WHITE if ship in self.selected_ships else Colors.UI_TEXT
+
+                    draw_text(self.screen, ship_info,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING + 15, y_offset,
+                             self.renderer.font_small, text_color)
+
+                if len(system_ships) > 5:
+                    y_offset += 20
+                    draw_text(self.screen, f"  ...i {len(system_ships) - 5} więcej",
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                             self.renderer.font_small, Colors.LIGHT_GRAY)
+
+                # Podpowiedź
+                y_offset += 25
+                draw_text(self.screen, "Shift+LPM - wybierz następny",
                          WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                          self.renderer.font_small, Colors.LIGHT_GRAY)
 
