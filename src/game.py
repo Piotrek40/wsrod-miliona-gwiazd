@@ -6,7 +6,7 @@ from typing import Optional
 from src.models.galaxy import Galaxy, StarSystem
 from src.models.empire import Empire
 from src.models.ship import Ship, ShipType
-from src.models.planet import Planet
+from src.models.planet import Planet, Building
 from src.ui.renderer import Renderer
 from src.ui.widgets import Panel, Button, draw_text
 from src.ui.screens.planet_screen import PlanetScreen
@@ -15,7 +15,7 @@ from src.config import (
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
     PANEL_PADDING, COLONIZABLE_PLANET_TYPES,
     POPULATION_FOOD_UPKEEP, POPULATION_ENERGY_UPKEEP,
-    DEFICIT_EFFECTS
+    DEFICIT_EFFECTS, TECHNOLOGIES, BUILDINGS
 )
 
 
@@ -508,7 +508,24 @@ class Game:
         # 3. Aplikuj efekty deficytu (głód, blackout)
         self._apply_deficit_effects()
 
-        # 4. Wzrost populacji i produkcja na planetach
+        # 4. Przetwarzanie badań
+        for empire in self.empires:
+            if empire.current_research and empire.total_science > 0:
+                completed = empire.add_research_points(empire.total_science)
+                if completed:
+                    tech_id = list(empire.researched_technologies)[-1]  # Ostatnio odkryta
+                    tech = TECHNOLOGIES.get(tech_id)
+                    if tech and empire.is_player:
+                        print(f"🔬 Odkryto technologię: {tech.name}!")
+                        print(f"   {tech.description}")
+                        if tech.unlocks_buildings:
+                            buildings_names = [BUILDINGS[bid].name for bid in tech.unlocks_buildings]
+                            print(f"   Odblokowane budynki: {', '.join(buildings_names)}")
+                        if tech.unlocks_planet_types:
+                            types_names = [pt for pt in tech.unlocks_planet_types]
+                            print(f"   Odblokowane typy planet: {', '.join(types_names)}")
+
+        # 5. Wzrost populacji i produkcja na planetach
         for system in self.galaxy.systems:
             for planet in system.planets:
                 if planet.is_colonized:
@@ -516,18 +533,39 @@ class Game:
 
                     # Przetwórz produkcję
                     completed_item = planet.process_production()
-                    if completed_item and completed_item.ship_type:
-                        # Stwórz nowy statek
-                        new_ship = Ship.create_ship(
-                            ship_id=self.next_ship_id,
-                            ship_type=completed_item.ship_type,
-                            owner_id=planet.owner_id,
-                            x=system.x,
-                            y=system.y
-                        )
-                        self.ships.append(new_ship)
-                        self.next_ship_id += 1
-                        print(f"✓ {new_ship.name} wyprodukowany w systemie {system.name}!")
+                    if completed_item:
+                        if completed_item.item_type == "ship" and completed_item.ship_type:
+                            # Stwórz nowy statek
+                            new_ship = Ship.create_ship(
+                                ship_id=self.next_ship_id,
+                                ship_type=completed_item.ship_type,
+                                owner_id=planet.owner_id,
+                                x=system.x,
+                                y=system.y
+                            )
+                            self.ships.append(new_ship)
+                            self.next_ship_id += 1
+                            print(f"✓ {new_ship.name} wyprodukowany w systemie {system.name}!")
+
+                        elif completed_item.item_type == "building" and completed_item.building_id:
+                            # Stwórz nowy budynek
+                            building_def = BUILDINGS.get(completed_item.building_id)
+                            if building_def:
+                                new_building = Building(
+                                    building_id=building_def.id,
+                                    name=building_def.name,
+                                    production_bonus=building_def.production_bonus,
+                                    science_bonus=building_def.science_bonus,
+                                    food_bonus=building_def.food_bonus,
+                                    energy_bonus=building_def.energy_bonus,
+                                    production_flat=building_def.production_flat,
+                                    science_flat=building_def.science_flat,
+                                    food_flat=building_def.food_flat,
+                                    energy_flat=building_def.energy_flat,
+                                    upkeep_energy=building_def.upkeep_energy,
+                                )
+                                planet.add_building(new_building)
+                                print(f"🏗️ {building_def.name} zbudowany na {planet.name}!")
 
     def _update_empire_resources(self):
         """Aktualizuj całkowite zasoby wszystkich imperiów"""
@@ -551,6 +589,15 @@ class Game:
             # Oblicz zużycie zasobów
             food_upkeep = total_population * POPULATION_FOOD_UPKEEP
             energy_upkeep = total_population * POPULATION_ENERGY_UPKEEP
+
+            # Dodaj zużycie energii przez budynki
+            building_energy_upkeep = 0.0
+            for system in self.galaxy.systems:
+                for planet in system.planets:
+                    if planet.owner_id == empire.id:
+                        for building in planet.buildings:
+                            building_energy_upkeep += building.upkeep_energy
+            energy_upkeep += building_energy_upkeep
             # TODO: Dodać zużycie energii przez statki
 
             # Oblicz bilans (produkcja - zużycie)

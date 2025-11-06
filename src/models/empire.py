@@ -23,8 +23,8 @@ class Empire:
 
     # Technologie
     researched_technologies: set[str] = field(default_factory=set)
-    current_research: Optional[str] = None
-    research_points: float = 0.0
+    current_research: Optional[str] = None  # ID badanej technologii
+    research_progress: float = 0.0  # Zgromadzone punkty nauki dla obecnego badania
 
     # Zasoby (produkcja i zużycie)
     total_production: float = 0.0
@@ -58,19 +58,79 @@ class Empire:
         """Czy system został odkryty"""
         return system_id in self.explored_systems
 
-    def research_technology(self, tech_name: str):
+    def start_research(self, tech_id: str):
         """Rozpocznij badanie technologii"""
-        self.current_research = tech_name
+        self.current_research = tech_id
+        self.research_progress = 0.0
 
-    def complete_research(self):
-        """Zakończ badanie obecnej technologii"""
-        if self.current_research:
+    def add_research_points(self, points: float) -> bool:
+        """
+        Dodaj punkty nauki do obecnego badania.
+        Zwraca True jeśli technologia została odkryta.
+        """
+        if not self.current_research:
+            return False
+
+        from src.config import TECHNOLOGIES
+        tech = TECHNOLOGIES.get(self.current_research)
+        if not tech:
+            return False
+
+        self.research_progress += points
+
+        # Sprawdź czy badanie zakończone
+        if self.research_progress >= tech.cost:
             self.researched_technologies.add(self.current_research)
             self.current_research = None
+            self.research_progress = 0.0
+            return True
 
-    def has_technology(self, tech_name: str) -> bool:
+        return False
+
+    def can_research(self, tech_id: str) -> bool:
+        """Sprawdź czy można badać daną technologię (prereq spełnione)"""
+        from src.config import TECHNOLOGIES
+        tech = TECHNOLOGIES.get(tech_id)
+        if not tech:
+            return False
+
+        # Sprawdź czy już zbadana
+        if tech_id in self.researched_technologies:
+            return False
+
+        # Sprawdź prereq
+        for prereq_id in tech.prerequisites:
+            if prereq_id not in self.researched_technologies:
+                return False
+
+        return True
+
+    def get_available_technologies(self) -> list[str]:
+        """Zwróć listę technologii dostępnych do badania"""
+        from src.config import TECHNOLOGIES
+        available = []
+        for tech_id in TECHNOLOGIES.keys():
+            if self.can_research(tech_id):
+                available.append(tech_id)
+        return available
+
+    def has_technology(self, tech_id: str) -> bool:
         """Czy imperium posiada technologię"""
-        return tech_name in self.researched_technologies
+        return tech_id in self.researched_technologies
+
+    def can_build(self, building_id: str) -> bool:
+        """Sprawdź czy można budować dany budynek (technologia zbadana)"""
+        from src.config import BUILDINGS
+        building_def = BUILDINGS.get(building_id)
+        if not building_def:
+            return False
+
+        # Jeśli nie wymaga tech, zawsze można
+        if building_def.requires_tech is None:
+            return True
+
+        # Sprawdź czy tech zbadana
+        return self.has_technology(building_def.requires_tech)
 
     def get_relation(self, other_empire_id: int) -> str:
         """Pobierz status relacji z innym imperium"""

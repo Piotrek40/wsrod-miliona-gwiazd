@@ -222,6 +222,241 @@ NON_COLONIZABLE_TYPES = [
 ]
 
 # === BADANIA ===
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class Technology:
+    """Definicja technologii"""
+    id: str
+    name: str
+    description: str
+    cost: int  # Punkty nauki potrzebne do odkrycia
+    category: str
+    prerequisites: list[str]  # Lista ID technologii wymaganych
+    unlocks_buildings: list[str]  # Lista ID budynków które odblokowuje
+    unlocks_ships: list[str]  # Lista typów statków które odblokowuje
+    unlocks_planet_types: list[str]  # Lista typów planet do kolonizacji
+
+# Drzewo technologii
+TECHNOLOGIES = {
+    # === TIER 1 - Początkowe (dostępne od startu) ===
+
+    "basic_farming": Technology(
+        id="basic_farming",
+        name="Zaawansowane Rolnictwo",
+        description="Ulepszone techniki uprawy zwiększają produkcję żywności",
+        cost=100,
+        category="Biotechnologia",
+        prerequisites=[],
+        unlocks_buildings=["farm"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    "basic_industry": Technology(
+        id="basic_industry",
+        name="Automatyzacja Przemysłowa",
+        description="Roboty zwiększają wydajność fabryk",
+        cost=100,
+        category="Konstrukcja",
+        prerequisites=[],
+        unlocks_buildings=["factory"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    "basic_power": Technology(
+        id="basic_power",
+        name="Fuzja Jądrowa",
+        description="Reaktory fuzyjne dostarczają czystej energii",
+        cost=100,
+        category="Fizyka",
+        prerequisites=[],
+        unlocks_buildings=["power_plant"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    "basic_research": Technology(
+        id="basic_research",
+        name="Laboratoria Badawcze",
+        description="Specjalistyczne laboratoria przyspieszają badania",
+        cost=100,
+        category="Komputery",
+        prerequisites=[],
+        unlocks_buildings=["research_lab"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    # === TIER 2 - Średniozaawansowane ===
+
+    "advanced_farming": Technology(
+        id="advanced_farming",
+        name="Hydroponika",
+        description="Uprawy bez gleby - jeszcze więcej żywności",
+        cost=250,
+        category="Biotechnologia",
+        prerequisites=["basic_farming"],
+        unlocks_buildings=["hydroponic_farm"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    "ice_colonization": Technology(
+        id="ice_colonization",
+        name="Kolonizacja Lodowa",
+        description="Kopuły cieplne pozwalają kolonizować lodowe planety",
+        cost=300,
+        category="Chemia",
+        prerequisites=["basic_power"],
+        unlocks_buildings=[],
+        unlocks_ships=[],
+        unlocks_planet_types=["ICE"],
+    ),
+
+    "advanced_ships": Technology(
+        id="advanced_ships",
+        name="Zaawansowane Kadłuby",
+        description="Większe statki do walki i eksploracji",
+        cost=200,
+        category="Konstrukcja",
+        prerequisites=["basic_industry"],
+        unlocks_buildings=[],
+        unlocks_ships=["FIGHTER", "CRUISER"],
+        unlocks_planet_types=[],
+    ),
+
+    # === TIER 3 - Zaawansowane ===
+
+    "rock_colonization": Technology(
+        id="rock_colonization",
+        name="Kopuły Skalne",
+        description="Hermetyczne kopuły do kolonizacji planet bez atmosfery",
+        cost=500,
+        category="Konstrukcja",
+        prerequisites=["ice_colonization", "basic_industry"],
+        unlocks_buildings=[],
+        unlocks_ships=[],
+        unlocks_planet_types=["ROCK"],
+    ),
+
+    "rare_metal_extraction": Technology(
+        id="rare_metal_extraction",
+        name="Głębokie Wiercenie",
+        description="Dostęp do metali rzadkich w skorupie planetarnej",
+        cost=400,
+        category="Konstrukcja",
+        prerequisites=["basic_industry"],
+        unlocks_buildings=["mining_complex"],
+        unlocks_ships=[],
+        unlocks_planet_types=[],
+    ),
+
+    "battleships": Technology(
+        id="battleships",
+        name="Pancerniki Wojenne",
+        description="Potężne statki wojenne - kręgosłup floty",
+        cost=600,
+        category="Konstrukcja",
+        prerequisites=["advanced_ships", "rare_metal_extraction"],
+        unlocks_buildings=[],
+        unlocks_ships=["BATTLESHIP"],
+        unlocks_planet_types=[],
+    ),
+}
+
+# === BUDYNKI ===
+@dataclass
+class BuildingDefinition:
+    """Definicja budynku"""
+    id: str
+    name: str
+    description: str
+    cost: int  # Koszt produkcji
+    upkeep_energy: float  # Koszt utrzymania w energii/turę
+    requires_tech: Optional[str]  # ID wymaganej technologii (None = dostępny od startu)
+
+    # Bonusy (dodawane do produkcji planety)
+    production_bonus: float = 0.0
+    science_bonus: float = 0.0
+    food_bonus: float = 0.0
+    energy_bonus: float = 0.0
+
+    # Bonusy płaskie (dodawane bezpośrednio, nie mnożnik)
+    production_flat: float = 0.0
+    science_flat: float = 0.0
+    food_flat: float = 0.0
+    energy_flat: float = 0.0
+
+BUILDINGS = {
+    # === TIER 1 - Podstawowe budynki ===
+
+    "farm": BuildingDefinition(
+        id="farm",
+        name="Farma",
+        description="Zwiększa produkcję żywności o 50%",
+        cost=150,
+        upkeep_energy=1.0,
+        requires_tech="basic_farming",
+        food_bonus=0.5,  # +50% do żywności
+    ),
+
+    "factory": BuildingDefinition(
+        id="factory",
+        name="Fabryka",
+        description="Zwiększa produkcję o 40%",
+        cost=200,
+        upkeep_energy=2.0,
+        requires_tech="basic_industry",
+        production_bonus=0.4,  # +40% do produkcji
+    ),
+
+    "power_plant": BuildingDefinition(
+        id="power_plant",
+        name="Elektrownia Fuzji",
+        description="Dodaje +15 energii",
+        cost=180,
+        upkeep_energy=0.0,  # Produkuje energię, nie zużywa
+        requires_tech="basic_power",
+        energy_flat=15.0,  # +15 energii (płaska wartość)
+    ),
+
+    "research_lab": BuildingDefinition(
+        id="research_lab",
+        name="Laboratorium",
+        description="Zwiększa produkcję nauki o 60%",
+        cost=220,
+        upkeep_energy=2.5,
+        requires_tech="basic_research",
+        science_bonus=0.6,  # +60% do nauki
+    ),
+
+    # === TIER 2 - Zaawansowane ===
+
+    "hydroponic_farm": BuildingDefinition(
+        id="hydroponic_farm",
+        name="Farma Hydroponiczna",
+        description="Zwiększa produkcję żywności o 90% + 10 płasko",
+        cost=350,
+        upkeep_energy=3.0,
+        requires_tech="advanced_farming",
+        food_bonus=0.9,  # +90%
+        food_flat=10.0,  # +10 żywności
+    ),
+
+    "mining_complex": BuildingDefinition(
+        id="mining_complex",
+        name="Kompleks Wydobywczy",
+        description="Wydobywa metale rzadkie. +70% produkcji (wymaga złóż na planecie)",
+        cost=500,
+        upkeep_energy=4.0,
+        requires_tech="rare_metal_extraction",
+        production_bonus=0.7,  # +70% do produkcji
+    ),
+}
+
 TECH_CATEGORIES = [
     "Fizyka",
     "Napędy",
