@@ -8,6 +8,7 @@ from src.models.galaxy import Galaxy, StarSystem
 from src.models.ship import Ship
 from src.ui.camera import Camera
 from src.config import Colors, WINDOW_WIDTH, WINDOW_HEIGHT, BACKGROUND_STARS
+from src.graphics.starfield import Starfield
 
 
 class Renderer:
@@ -19,7 +20,10 @@ class Renderer:
         self.screen = screen
         self.camera = Camera()
 
-        # Generuj tło z gwiazdami
+        # Nowy starfield generator (UPGRADE!)
+        self.starfield = Starfield(WINDOW_WIDTH, WINDOW_HEIGHT, num_stars=800)
+
+        # Stare tło (backup, gdyby coś poszło nie tak)
         self.background_stars = self._generate_background_stars()
 
         # Czcionki
@@ -28,7 +32,7 @@ class Renderer:
         self.font_large = pygame.font.Font(None, 32)
 
     def _generate_background_stars(self) -> list[tuple[int, int, int]]:
-        """Generuj małe gwiazdki w tle dla efektu"""
+        """Generuj małe gwiazdki w tle dla efektu (STARA WERSJA - backup)"""
         stars = []
         for _ in range(BACKGROUND_STARS):
             x = random.randint(0, WINDOW_WIDTH)
@@ -41,11 +45,13 @@ class Renderer:
         """Wyczyść ekran"""
         self.screen.fill(Colors.BLACK)
 
-    def draw_background(self):
-        """Rysuj tło z gwiazdkami"""
-        for x, y, brightness in self.background_stars:
-            color = (brightness, brightness, brightness)
-            pygame.draw.circle(self.screen, color, (x, y), 1)
+    def draw_background(self, dt=0.016):
+        """Rysuj tło z gwiazdkami (NOWA WERSJA z parallax!)"""
+        # Update starfield (migotanie)
+        self.starfield.update(dt)
+
+        # Rysuj z parallax
+        self.starfield.draw_with_parallax(self.screen, self.camera)
 
     def draw_galaxy(self, galaxy: Galaxy, player_empire_id: int, empire_colors: dict[int, tuple]):
         """Rysuj całą galaktykę"""
