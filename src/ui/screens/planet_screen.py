@@ -116,15 +116,32 @@ class PlanetScreen:
         # Informacje o planecie
         y = self.panel_y + 60
 
+        # Specjalne zasoby
+        special_resources = []
+        if self.planet.has_rare_metals:
+            special_resources.append("💎 Metale Rzadkie")
+        if self.planet.has_crystals:
+            special_resources.append("🔮 Kryształy")
+
         info_lines = [
             f"Typ: {self.planet.planet_type.value}",
             f"Rozmiar: {self.planet.size}",
             f"Bogactwo minerałów: {self.planet.mineral_richness:.2f}x",
+        ]
+
+        if special_resources:
+            info_lines.append(f"Zasoby: {', '.join(special_resources)}")
+
+        info_lines.extend([
             "",
             f"Populacja: {int(self.planet.population)} / {int(self.planet.max_population)}",
-            f"Produkcja/turę: {self.planet.calculate_production():.1f}",
-            f"Nauka/turę: {self.planet.calculate_science():.1f}",
-        ]
+            "",
+            "═ Produkcja zasobów/turę ═",
+            f"  🔨 Produkcja: {self.planet.calculate_production():.1f}",
+            f"  🔬 Nauka: {self.planet.calculate_science():.1f}",
+            f"  🌾 Żywność: {self.planet.calculate_food():.1f}",
+            f"  ⚡ Energia: {self.planet.calculate_energy():.1f}",
+        ])
 
         for line in info_lines:
             text_surface = self.font_small.render(line, True, Colors.UI_TEXT)

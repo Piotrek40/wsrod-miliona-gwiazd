@@ -3,7 +3,12 @@ Model planety
 """
 from dataclasses import dataclass, field
 from typing import Optional
-from src.config import PlanetType, Colors, ShipType, SHIP_COST
+from src.config import (
+    PlanetType, Colors, ShipType, SHIP_COST,
+    BASE_PRODUCTION_PER_POP, BASE_SCIENCE_PER_POP,
+    BASE_FOOD_PER_POP, BASE_ENERGY_PER_POP,
+    PLANET_TYPE_MODIFIERS
+)
 import random
 
 
@@ -57,6 +62,10 @@ class Planet:
     population: float = 0.0
     max_population: float = field(init=False)
 
+    # Specjalne zasoby (generowane losowo)
+    has_rare_metals: bool = False  # Czy planeta ma złoża metali rzadkich
+    has_crystals: bool = False     # Czy planeta ma kryształy (bardzo rzadkie)
+
     # Budynki
     buildings: list[Building] = field(default_factory=list)
 
@@ -91,11 +100,16 @@ class Planet:
         self.population = initial_population
 
     def calculate_production(self) -> float:
-        """Oblicz produkcję planety na turę"""
+        """Oblicz produkcję (minerały) planety na turę"""
         if not self.is_colonized:
             return 0.0
 
-        base_production = self.population * self.mineral_richness
+        # Bazowa produkcja z populacji
+        base_production = self.population * BASE_PRODUCTION_PER_POP * self.mineral_richness
+
+        # Modyfikator typu planety
+        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('production', 1.0)
+        base_production *= planet_modifier
 
         # Bonusy z budynków
         building_bonus = sum(b.production_bonus for b in self.buildings)
@@ -107,12 +121,51 @@ class Planet:
         if not self.is_colonized:
             return 0.0
 
-        base_science = self.population * 0.5
+        # Bazowa nauka z populacji
+        base_science = self.population * BASE_SCIENCE_PER_POP
+
+        # Modyfikator typu planety
+        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('science', 1.0)
+        base_science *= planet_modifier
 
         # Bonusy z budynków
         building_bonus = sum(b.science_bonus for b in self.buildings)
 
         return base_science * (1.0 + building_bonus)
+
+    def calculate_food(self) -> float:
+        """Oblicz produkcję żywności na turę"""
+        if not self.is_colonized:
+            return 0.0
+
+        # Bazowa produkcja żywności z populacji
+        base_food = self.population * BASE_FOOD_PER_POP
+
+        # Modyfikator typu planety (ważny - pustynne/skalne mają mało żywności!)
+        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('food', 1.0)
+        base_food *= planet_modifier
+
+        # TODO: Bonusy z budynków (farmy)
+        # building_bonus = sum(b.food_bonus for b in self.buildings)
+
+        return base_food
+
+    def calculate_energy(self) -> float:
+        """Oblicz produkcję energii na turę"""
+        if not self.is_colonized:
+            return 0.0
+
+        # Bazowa produkcja energii z populacji
+        base_energy = self.population * BASE_ENERGY_PER_POP
+
+        # Modyfikator typu planety (pustynne dają więcej energii słonecznej!)
+        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('energy', 1.0)
+        base_energy *= planet_modifier
+
+        # TODO: Bonusy z budynków (elektrownie)
+        # building_bonus = sum(b.energy_bonus for b in self.buildings)
+
+        return base_energy
 
     def grow_population(self, growth_rate: float = 0.05):
         """Wzrost populacji"""
@@ -159,11 +212,29 @@ class Planet:
         size = random.randint(3, 10)
         mineral_richness = random.uniform(0.5, 2.0)
 
+        # Generuj specjalne zasoby (rzadkie!)
+        has_rare_metals = False
+        has_crystals = False
+
+        # Metale rzadkie: 30% szans na skalnych, 10% na innych
+        if planet_type == PlanetType.ROCK:
+            has_rare_metals = random.random() < 0.3
+        elif planet_type in [PlanetType.EARTH_LIKE, PlanetType.DESERT]:
+            has_rare_metals = random.random() < 0.1
+
+        # Kryształy: BARDZO rzadkie - 5% na lodowych, 2% na skalnych
+        if planet_type == PlanetType.ICE:
+            has_crystals = random.random() < 0.05
+        elif planet_type == PlanetType.ROCK:
+            has_crystals = random.random() < 0.02
+
         return Planet(
             name=name,
             planet_type=planet_type,
             size=size,
             mineral_richness=mineral_richness,
             x=orbit_x,
-            y=orbit_y
+            y=orbit_y,
+            has_rare_metals=has_rare_metals,
+            has_crystals=has_crystals
         )
