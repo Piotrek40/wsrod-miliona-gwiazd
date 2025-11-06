@@ -47,17 +47,17 @@ class Renderer:
             color = (brightness, brightness, brightness)
             pygame.draw.circle(self.screen, color, (x, y), 1)
 
-    def draw_galaxy(self, galaxy: Galaxy, player_empire_id: int):
+    def draw_galaxy(self, galaxy: Galaxy, player_empire_id: int, empire_colors: dict[int, tuple]):
         """Rysuj całą galaktykę"""
         for system in galaxy.systems:
             # Sprawdź czy system jest odkryty przez gracza
             if system.is_explored_by(player_empire_id):
-                self.draw_star_system(system)
+                self.draw_star_system(system, empire_colors)
             else:
                 # Rysuj jako nieodkryty (mgła wojny)
                 self.draw_unexplored_system(system)
 
-    def draw_star_system(self, system: StarSystem):
+    def draw_star_system(self, system: StarSystem, empire_colors: dict[int, tuple]):
         """Rysuj system gwiezdny"""
         # Przekształć współrzędne świata na ekran
         screen_x, screen_y = self.camera.world_to_screen(system.x, system.y)
@@ -79,26 +79,28 @@ class Renderer:
             name_rect = name_surface.get_rect(center=(int(screen_x), int(screen_y) + star_radius + 10))
             self.screen.blit(name_surface, name_rect)
 
-        # Rysuj planety (jeśli zoom wystarczający)
-        if self.camera.zoom > 0.8:
-            self.draw_planets(system, screen_x, screen_y)
+        # Rysuj planety ZAWSZE (ale większe przy zoomie)
+        self.draw_planets(system, screen_x, screen_y, empire_colors)
 
-    def draw_planets(self, system: StarSystem, center_x: float, center_y: float):
-        """Rysuj planety w systemie"""
+    def draw_planets(self, system: StarSystem, center_x: float, center_y: float, empire_colors: dict[int, tuple]):
+        """Rysuj planety w systemie - WIDOCZNE ZAWSZE"""
         for planet in system.planets:
-            # Pozycja planety względem gwiazdy
-            planet_screen_x = center_x + planet.x * self.camera.zoom
-            planet_screen_y = center_y + planet.y * self.camera.zoom
+            # Pozycja planety względem gwiazdy (mniejsza orbita dla lepszej widoczności)
+            orbit_scale = 0.4 if self.camera.zoom < 1.0 else 1.0
+            planet_screen_x = center_x + planet.x * self.camera.zoom * orbit_scale
+            planet_screen_y = center_y + planet.y * self.camera.zoom * orbit_scale
 
-            # Rozmiar planety
-            planet_radius = max(2, int(planet.size * self.camera.zoom / 2))
+            # Rozmiar planety (minimalnie 3px żeby było widać)
+            base_size = 4 if self.camera.zoom < 1.0 else planet.size
+            planet_radius = max(3, int(base_size * self.camera.zoom / 2))
 
             # Rysuj planetę
             pygame.draw.circle(self.screen, planet.color, (int(planet_screen_x), int(planet_screen_y)), planet_radius)
 
             # Jeśli skolonizowana, rysuj obramowanie kolorem właściciela
             if planet.is_colonized:
-                pygame.draw.circle(self.screen, Colors.PLAYER, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 2, 1)
+                owner_color = empire_colors.get(planet.owner_id, Colors.WHITE)
+                pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 2, 2)
 
     def draw_unexplored_system(self, system: StarSystem):
         """Rysuj nieodkryty system (mgła wojny)"""

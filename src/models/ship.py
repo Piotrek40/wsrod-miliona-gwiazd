@@ -83,6 +83,36 @@ class Ship:
         self.x += direction_x * self.speed * delta_time
         self.y += direction_y * self.speed * delta_time
 
+    def move_one_turn(self):
+        """Przesuń statek o jedną turę (używane w trybie turowym)"""
+        if not self.is_moving or self.target_x is None or self.target_y is None:
+            return
+
+        # Oblicz kierunek
+        dx = self.target_x - self.x
+        dy = self.target_y - self.y
+        distance = math.sqrt(dx**2 + dy**2)
+
+        # Prędkość w turze (speed * 10 dla lepszego balansu)
+        move_distance = self.speed * 10
+
+        # Jeśli jesteśmy blisko celu, zatrzymaj się
+        if distance <= move_distance:
+            self.x = self.target_x
+            self.y = self.target_y
+            self.is_moving = False
+            self.target_x = None
+            self.target_y = None
+            return True  # Dotarliśmy!
+
+        # Ruch w kierunku celu
+        direction_x = dx / distance
+        direction_y = dy / distance
+
+        self.x += direction_x * move_distance
+        self.y += direction_y * move_distance
+        return False  # Jeszcze w drodze
+
     def take_damage(self, damage: float):
         """Otrzymaj obrażenia"""
         actual_damage = max(0, damage - self.defense)
