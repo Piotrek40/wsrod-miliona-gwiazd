@@ -159,7 +159,7 @@ class Game:
             dt = self.clock.tick(FPS) / 1000.0  # Delta time w sekundach
             self.handle_events()
             self.update(dt)
-            self.render()
+            self.render(dt)  # Przekaż dt do renderera (dla animacji)
 
         pygame.quit()
 
@@ -697,10 +697,10 @@ class Game:
                     print(f"   Produkcja: -{penalty_prod*100:.0f}%, Nauka: -{penalty_sci*100:.0f}%")
                     print(f"   Buduj elektrownie lub zmniejsz populację!")
 
-    def render(self):
+    def render(self, dt=0.016):
         """Renderuj grę"""
         self.renderer.clear()
-        self.renderer.draw_background()
+        self.renderer.draw_background(dt)
 
         # Przygotuj kolory imperiów
         empire_colors = {empire.id: empire.color for empire in self.empires}

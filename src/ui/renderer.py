@@ -8,6 +8,8 @@ from src.models.galaxy import Galaxy, StarSystem
 from src.models.ship import Ship
 from src.ui.camera import Camera
 from src.config import Colors, WINDOW_WIDTH, WINDOW_HEIGHT, BACKGROUND_STARS
+from src.graphics.starfield import Starfield
+from src.graphics.planet_renderer import PlanetRenderer, get_planet_render_flags
 
 
 class Renderer:
@@ -19,7 +21,10 @@ class Renderer:
         self.screen = screen
         self.camera = Camera()
 
-        # Generuj tło z gwiazdami
+        # Nowy starfield generator (UPGRADE!)
+        self.starfield = Starfield(WINDOW_WIDTH, WINDOW_HEIGHT, num_stars=800)
+
+        # Stare tło (backup, gdyby coś poszło nie tak)
         self.background_stars = self._generate_background_stars()
 
         # Czcionki
@@ -28,7 +33,7 @@ class Renderer:
         self.font_large = pygame.font.Font(None, 32)
 
     def _generate_background_stars(self) -> list[tuple[int, int, int]]:
-        """Generuj małe gwiazdki w tle dla efektu"""
+        """Generuj małe gwiazdki w tle dla efektu (STARA WERSJA - backup)"""
         stars = []
         for _ in range(BACKGROUND_STARS):
             x = random.randint(0, WINDOW_WIDTH)
@@ -41,11 +46,13 @@ class Renderer:
         """Wyczyść ekran"""
         self.screen.fill(Colors.BLACK)
 
-    def draw_background(self):
-        """Rysuj tło z gwiazdkami"""
-        for x, y, brightness in self.background_stars:
-            color = (brightness, brightness, brightness)
-            pygame.draw.circle(self.screen, color, (x, y), 1)
+    def draw_background(self, dt=0.016):
+        """Rysuj tło z gwiazdkami (NOWA WERSJA z parallax!)"""
+        # Update starfield (migotanie)
+        self.starfield.update(dt)
+
+        # Rysuj z parallax
+        self.starfield.draw_with_parallax(self.screen, self.camera)
 
     def draw_galaxy(self, galaxy: Galaxy, player_empire_id: int, empire_colors: dict[int, tuple]):
         """Rysuj całą galaktykę"""
@@ -83,7 +90,7 @@ class Renderer:
         self.draw_planets(system, screen_x, screen_y, empire_colors)
 
     def draw_planets(self, system: StarSystem, center_x: float, center_y: float, empire_colors: dict[int, tuple]):
-        """Rysuj planety w systemie - WIDOCZNE ZAWSZE"""
+        """Rysuj planety w systemie - WIDOCZNE ZAWSZE (NOWA WERSJA z gradientami!)"""
         for planet in system.planets:
             # Pozycja planety względem gwiazdy (mniejsza orbita dla lepszej widoczności)
             orbit_scale = 0.4 if self.camera.zoom < 1.0 else 1.0
@@ -94,13 +101,25 @@ class Renderer:
             base_size = 4 if self.camera.zoom < 1.0 else planet.size
             planet_radius = max(3, int(base_size * self.camera.zoom / 2))
 
-            # Rysuj planetę
-            pygame.draw.circle(self.screen, planet.color, (int(planet_screen_x), int(planet_screen_y)), planet_radius)
+            # === NOWY RENDERER z gradientami i efektami! ===
+            has_atmosphere, has_rings = get_planet_render_flags(planet.planet_type)
+
+            PlanetRenderer.draw_planet_advanced(
+                self.screen,
+                int(planet_screen_x),
+                int(planet_screen_y),
+                planet_radius,
+                planet.planet_type,
+                planet.color,
+                has_atmosphere=has_atmosphere,
+                has_rings=has_rings
+            )
 
             # Jeśli skolonizowana, rysuj obramowanie kolorem właściciela
             if planet.is_colonized:
                 owner_color = empire_colors.get(planet.owner_id, Colors.WHITE)
-                pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 2, 2)
+                # Grubsze obramowanie, żeby było widoczne przez glow
+                pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 3, 2)
 
     def draw_unexplored_system(self, system: StarSystem):
         """Rysuj nieodkryty system (mgła wojny) - WIDOCZNY!"""
