@@ -136,6 +136,25 @@ BASE_POPULATION_GROWTH = 0.1  # 10% wzrostu na turę
 BASE_PRODUCTION_PER_POP = 1.0
 BASE_SCIENCE_PER_POP = 0.5
 
+# === KOLONIZACJA ===
+# Typy planet które można kolonizować na początku gry (bez zaawansowanych technologii)
+COLONIZABLE_PLANET_TYPES = [
+    PlanetType.EARTH_LIKE,  # Ziemiopodobna - najlepsza
+    PlanetType.OCEAN,       # Oceaniczna - dobra
+    PlanetType.DESERT,      # Pustynna - słabsza ale możliwa
+]
+
+# Typy wymagające zaawansowanych technologii (TODO: dodać system technologii)
+ADVANCED_COLONIZATION_TYPES = [
+    PlanetType.ICE,         # Lodowa - wymaga technologii środowiskowych
+    PlanetType.ROCK,        # Skalista - wymaga zaawansowanych kopuł
+]
+
+# Niekolonizowalne (nigdy)
+NON_COLONIZABLE_TYPES = [
+    PlanetType.GAS_GIANT,   # Gazowy olbrzym - niemożliwe do skolonizowania
+]
+
 # === BADANIA ===
 TECH_CATEGORIES = [
     "Fizyka",
