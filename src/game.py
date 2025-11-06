@@ -10,6 +10,7 @@ from src.models.planet import Planet, Building
 from src.ui.renderer import Renderer
 from src.ui.widgets import Panel, Button, draw_text
 from src.ui.screens.planet_screen import PlanetScreen
+from src.ui.screens.research_screen import ResearchScreen
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
@@ -47,6 +48,7 @@ class Game:
         self.selected_ships: list[Ship] = []  # Wybrane statki
         self.selected_planet = None  # Wybrana planeta (dla ekranu szczegółów)
         self.planet_screen: Optional[PlanetScreen] = None  # Ekran szczegółów planety
+        self.research_screen: Optional[ResearchScreen] = None  # Ekran badań
         self.info_panel: Optional[Panel] = None
         self.setup_ui()
 
@@ -157,6 +159,10 @@ class Game:
         if self.planet_screen:
             self.planet_screen.update(mouse_pos)
 
+        # Aktualizuj ekran badań jeśli jest otwarty
+        if self.research_screen:
+            self.research_screen.update(mouse_pos)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -232,10 +238,20 @@ class Game:
         elif key == pygame.K_c:
             self._handle_colonize_command()
 
-        # Escape - wyjście lub zamknij ekran planety
+        # R - otwórz ekran badań
+        elif key == pygame.K_r:
+            if not self.research_screen and not self.planet_screen:
+                self.research_screen = ResearchScreen(
+                    empire=self.player_empire,
+                    on_close=lambda: setattr(self, 'research_screen', None)
+                )
+
+        # Escape - wyjście lub zamknij ekrany
         elif key == pygame.K_ESCAPE:
             if self.planet_screen:
                 self.planet_screen = None
+            elif self.research_screen:
+                self.research_screen = None
             else:
                 self.running = False
 
@@ -262,6 +278,7 @@ class Game:
         self.planet_screen = PlanetScreen(
             planet=planet,
             system_name=self.selected_system.name,
+            empire=self.player_empire,
             on_close=lambda: setattr(self, 'planet_screen', None)
         )
 
@@ -270,6 +287,11 @@ class Game:
         # Jeśli ekran planety jest otwarty, przekaż do niego kliknięcie
         if self.planet_screen:
             self.planet_screen.handle_click(mouse_pos)
+            return
+
+        # Jeśli ekran badań jest otwarty, przekaż do niego kliknięcie
+        if self.research_screen:
+            self.research_screen.handle_click(mouse_pos)
             return
 
         # Sprawdź czy kliknięto w przycisk
@@ -685,6 +707,10 @@ class Game:
         if self.planet_screen:
             self.planet_screen.draw(self.screen)
 
+        # Rysuj ekran badań na wierzchu (jeśli otwarty)
+        if self.research_screen:
+            self.research_screen.draw(self.screen)
+
         pygame.display.flip()
 
     def _render_ui(self):
@@ -750,6 +776,47 @@ class Game:
         draw_text(self.screen, energy_text,
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, energy_color)
+
+        # === BADANIA ===
+        y_offset += 30
+        if self.player_empire.current_research:
+            current_tech = TECHNOLOGIES.get(self.player_empire.current_research)
+            if current_tech:
+                draw_text(self.screen, "═══ Badania ═══",
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         self.renderer.font_small, Colors.UI_HIGHLIGHT)
+
+                y_offset += 20
+                tech_name = current_tech.name[:25]  # Obetnij długie nazwy
+                draw_text(self.screen, f"🔬 {tech_name}",
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         self.renderer.font_small, Colors.UI_TEXT)
+
+                y_offset += 18
+                # Mini progress bar
+                progress = self.player_empire.research_progress / current_tech.cost
+                bar_width = PANEL_WIDTH - 2 * PANEL_PADDING
+                bar_height = 12
+                bar_x = WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING
+                bar_y = y_offset
+
+                # Tło
+                pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height))
+                # Wypełnienie
+                fill_width = int(bar_width * progress)
+                pygame.draw.rect(self.screen, Colors.UI_HIGHLIGHT, (bar_x, bar_y, fill_width, bar_height))
+                # Obramowanie
+                pygame.draw.rect(self.screen, Colors.LIGHT_GRAY, (bar_x, bar_y, bar_width, bar_height), 1)
+
+                y_offset += 15
+                progress_text = f"  {progress*100:.0f}% ({self.player_empire.research_progress:.0f}/{current_tech.cost})"
+                draw_text(self.screen, progress_text,
+                         WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                         self.renderer.font_small, Colors.LIGHT_GRAY)
+        else:
+            draw_text(self.screen, "R - badania",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     self.renderer.font_small, Colors.LIGHT_GRAY)
 
         # Statystyki eksploracji
         explored_count = len(self.player_empire.explored_systems)
@@ -968,9 +1035,12 @@ class Game:
         draw_text(self.screen, "C - kolonizuj (statek kolonistów)",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 25,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "P - zarządzaj planetą",
+        draw_text(self.screen, "R - badania technologii",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom - 10,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
-        draw_text(self.screen, "Spacja - zakończ turę",
+        draw_text(self.screen, "P - zarządzaj planetą",
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom + 5,
+                 self.renderer.font_small, Colors.LIGHT_GRAY)
+        draw_text(self.screen, "Spacja - zakończ turę",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_bottom + 20,
                  self.renderer.font_small, Colors.LIGHT_GRAY)
