@@ -116,8 +116,8 @@ class NebulaGenerator:
         for i in range(3):
             nebula[:, :, i] = (combined * color[i]).astype(np.uint8)
 
-        # Alpha (transparencja)
-        nebula[:, :, 3] = (combined * 100).astype(np.uint8)  # Półprzezroczyste
+        # Alpha (transparencja) - ZWIĘKSZONA dla lepszej widoczności
+        nebula[:, :, 3] = (combined * 180).astype(np.uint8)  # Bardziej widoczne
 
         # Convert to Pygame surface
         # NumPy array jest (height, width, channels), ale Pygame potrzebuje (width, height)
@@ -144,12 +144,12 @@ class NebulaGenerator:
         layer = pygame.Surface((width, height), pygame.SRCALPHA)
         layer.fill((0, 0, 0, 0))  # Transparent
 
-        # Predefiniowane kolory i pozycje mgławic
+        # Większe mgławice dla lepszej widoczności
+        # (color, position, size, density)
         nebulae_configs = [
-            # (color, position, size, density)
-            ((255, 100, 180), (width * 0.2, height * 0.3), (600, 600), 0.4),  # Różowa
-            ((100, 150, 255), (width * 0.7, height * 0.5), (700, 700), 0.3),  # Niebieska
-            ((180, 100, 255), (width * 0.5, height * 0.7), (500, 500), 0.35),  # Fioletowa
+            ((255, 100, 180), (width * 0.2, height * 0.3), (800, 800), 0.5),  # Różowa - większa i gęstsza
+            ((100, 150, 255), (width * 0.7, height * 0.5), (900, 900), 0.45),  # Niebieska - większa
+            ((180, 100, 255), (width * 0.5, height * 0.7), (700, 700), 0.4),  # Fioletowa - większa
         ]
 
         for i, (color, pos, size, density) in enumerate(nebulae_configs[:num_nebulae]):
