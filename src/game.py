@@ -509,6 +509,27 @@ class Game:
                  WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
                  self.renderer.font_small, Colors.UI_TEXT)
 
+        # Statystyki eksploracji
+        explored_count = len(self.player_empire.explored_systems)
+        total_systems = len(self.galaxy.systems)
+        unexplored = total_systems - explored_count
+        y_offset += 25
+        draw_text(self.screen, f"Systemy: {explored_count}/{total_systems}",
+                 WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                 self.renderer.font_small, Colors.LIGHT_GRAY)
+
+        # Hint o nieodkrytych systemach (na początku gry)
+        if self.current_turn < 3 and unexplored > 0:
+            y_offset += 20
+            hint_color = (100, 150, 200)  # Niebieski hint
+            draw_text(self.screen, f"💡 {unexplored} szare kropki",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     self.renderer.font_small, hint_color)
+            y_offset += 18
+            draw_text(self.screen, "   to nieodkryte systemy!",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_offset,
+                     self.renderer.font_small, hint_color)
+
         # Informacje o wybranych statkach
         if self.selected_ships:
             y_offset += 50
