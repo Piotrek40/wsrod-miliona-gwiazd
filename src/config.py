@@ -44,7 +44,7 @@ class Colors:
     PLANET_GAS = (255, 200, 150)  # Gazowy olbrzym
 
     # Mgła wojny
-    FOG_OF_WAR = (30, 30, 30)
+    FOG_OF_WAR = (80, 80, 100)  # Jaśniejszy szaro-niebieski, lepiej widoczny
 
 # === GALAKTYKA ===
 GALAXY_WIDTH = 3000  # Szerokość mapy galaktyki w pikselach

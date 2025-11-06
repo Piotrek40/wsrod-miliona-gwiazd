@@ -103,14 +103,19 @@ class Renderer:
                 pygame.draw.circle(self.screen, owner_color, (int(planet_screen_x), int(planet_screen_y)), planet_radius + 2, 2)
 
     def draw_unexplored_system(self, system: StarSystem):
-        """Rysuj nieodkryty system (mgła wojny)"""
+        """Rysuj nieodkryty system (mgła wojny) - WIDOCZNY!"""
         screen_x, screen_y = self.camera.world_to_screen(system.x, system.y)
 
         if not self._is_visible(screen_x, screen_y):
             return
 
-        # Rysuj jako szary punkt
-        pygame.draw.circle(self.screen, Colors.FOG_OF_WAR, (int(screen_x), int(screen_y)), 2)
+        # Rysuj jako WIĘKSZY jaśniejszy punkt (łatwiej zobaczyć)
+        radius = max(4, int(5 * self.camera.zoom))
+        pygame.draw.circle(self.screen, Colors.FOG_OF_WAR, (int(screen_x), int(screen_y)), radius)
+
+        # Dodaj delikatne pulsowanie (ciemniejsze obramowanie)
+        darker = tuple(max(0, c - 30) for c in Colors.FOG_OF_WAR)
+        pygame.draw.circle(self.screen, darker, (int(screen_x), int(screen_y)), radius + 1, 1)
 
     def draw_ship(self, ship: Ship, empire_color: tuple, is_selected: bool = False):
         """Rysuj statek"""
