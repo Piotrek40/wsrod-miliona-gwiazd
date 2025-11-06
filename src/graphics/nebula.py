@@ -28,27 +28,40 @@ class NebulaGenerator:
             """Smoothstep interpolation"""
             return 6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3
 
+        # POPRAWKA: Używaj linspace zamiast mgrid dla dokładnych rozmiarów
         delta = (res[0] / shape[0], res[1] / shape[1])
-        d = (shape[0] // res[0], shape[1] // res[1])
-        grid = np.mgrid[0:res[0]:delta[0], 0:res[1]:delta[1]].transpose(1, 2, 0) % 1
+
+        # Stwórz grid z dokładnymi wymiarami
+        x = np.linspace(0, res[0], shape[0], endpoint=False)
+        y = np.linspace(0, res[1], shape[1], endpoint=False)
+        grid_x, grid_y = np.meshgrid(x, y, indexing='ij')
+
+        # Zapamiętaj pozycję w gridzie (0-1 w każdej komórce)
+        grid_x_frac = grid_x % 1
+        grid_y_frac = grid_y % 1
+        grid = np.dstack((grid_x_frac, grid_y_frac))
+
+        # Indeksy grid
+        grid_x_int = grid_x.astype(int)
+        grid_y_int = grid_y.astype(int)
 
         # Random gradients
         angles = 2 * np.pi * np.random.rand(res[0] + 1, res[1] + 1)
         gradients = np.dstack((np.cos(angles), np.sin(angles)))
 
-        # Tile gradients
-        g00 = gradients[0:-1, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-        g10 = gradients[1:, 0:-1].repeat(d[0], 0).repeat(d[1], 1)
-        g01 = gradients[0:-1, 1:].repeat(d[0], 0).repeat(d[1], 1)
-        g11 = gradients[1:, 1:].repeat(d[0], 0).repeat(d[1], 1)
+        # Pobierz gradienty dla 4 rogów każdej komórki
+        g00 = gradients[grid_x_int, grid_y_int]
+        g10 = gradients[grid_x_int + 1, grid_y_int]
+        g01 = gradients[grid_x_int, grid_y_int + 1]
+        g11 = gradients[grid_x_int + 1, grid_y_int + 1]
 
-        # Ramps
-        n00 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1])) * g00, 2)
-        n10 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1])) * g10, 2)
-        n01 = np.sum(np.dstack((grid[:, :, 0], grid[:, :, 1] - 1)) * g01, 2)
-        n11 = np.sum(np.dstack((grid[:, :, 0] - 1, grid[:, :, 1] - 1)) * g11, 2)
+        # Wektory od rogów do punktu
+        n00 = np.sum(grid * g00, 2)
+        n10 = np.sum((grid - [1, 0]) * g10, 2)
+        n01 = np.sum((grid - [0, 1]) * g01, 2)
+        n11 = np.sum((grid - [1, 1]) * g11, 2)
 
-        # Interpolation
+        # Interpolation z smoothstep
         t = f(grid)
         n0 = n00 * (1 - t[:, :, 0]) + t[:, :, 0] * n10
         n1 = n01 * (1 - t[:, :, 0]) + t[:, :, 0] * n11
