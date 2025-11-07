@@ -11,6 +11,8 @@ from src.config import Colors, WINDOW_WIDTH, WINDOW_HEIGHT, BACKGROUND_STARS
 from src.graphics.starfield import Starfield
 from src.graphics.planet_renderer import PlanetRenderer, get_planet_render_flags
 from src.graphics.planet_textures import PlanetTextureGenerator
+from src.graphics.star_renderer import StarRenderer
+from src.graphics.ship_renderer import ShipRenderer
 
 
 class Renderer:
@@ -27,6 +29,9 @@ class Renderer:
 
         # Stare tło (backup, gdyby coś poszło nie tak)
         self.background_stars = self._generate_background_stars()
+
+        # Timer dla animacji (pulsowanie gwiazd)
+        self.time = 0.0
 
         # Czcionki
         self.font_small = pygame.font.Font(None, 18)
@@ -49,6 +54,9 @@ class Renderer:
 
     def draw_background(self, dt=0.016):
         """Rysuj tło z gwiazdkami (NOWA WERSJA z parallax!)"""
+        # Update timera (dla pulsowania gwiazd)
+        self.time += dt
+
         # Update starfield (migotanie)
         self.starfield.update(dt)
 
@@ -74,12 +82,23 @@ class Renderer:
         if not self._is_visible(screen_x, screen_y):
             return
 
-        # Rysuj gwiazdę
+        # Rysuj gwiazdę (NOWY RENDERER z efektami!)
         star_radius = int(system.star_size * self.camera.zoom)
         if star_radius < 1:
             star_radius = 1
 
-        pygame.draw.circle(self.screen, system.color, (int(screen_x), int(screen_y)), star_radius)
+        # Oblicz współczynnik pulsowania
+        pulse_factor = StarRenderer.calculate_pulse_factor(self.time, system.id)
+
+        # Rysuj z zaawansowanymi efektami
+        StarRenderer.draw_star_advanced(
+            self.screen,
+            int(screen_x),
+            int(screen_y),
+            star_radius,
+            system.star_type,
+            pulse_factor=pulse_factor
+        )
 
         # Rysuj nazwę systemu (jeśli zoom wystarczający)
         if self.camera.zoom > 0.7:
@@ -182,29 +201,39 @@ class Renderer:
         pygame.draw.circle(self.screen, darker, (int(screen_x), int(screen_y)), radius + 1, 1)
 
     def draw_ship(self, ship: Ship, empire_color: tuple, is_selected: bool = False):
-        """Rysuj statek"""
+        """Rysuj statek (NOWY RENDERER z 3D-style sprites!)"""
         screen_x, screen_y = self.camera.world_to_screen(ship.x, ship.y)
 
         if not self._is_visible(screen_x, screen_y):
             return
 
-        # Rysuj statek jako trójkąt
-        size = 8 * self.camera.zoom
-        points = [
-            (screen_x, screen_y - size),  # Góra
-            (screen_x - size/2, screen_y + size/2),  # Lewy dół
-            (screen_x + size/2, screen_y + size/2),  # Prawy dół
-        ]
-        pygame.draw.polygon(self.screen, empire_color, points)
+        # Oblicz rotację statku (jeśli się porusza)
+        rotation = 0.0
+        if ship.is_moving and ship.target_x is not None and ship.target_y is not None:
+            rotation = ShipRenderer.calculate_ship_rotation(
+                ship.x, ship.y, ship.target_x, ship.target_y
+            )
 
-        # Jeśli wybrany, rysuj obramowanie
-        if is_selected:
-            pygame.draw.circle(self.screen, Colors.WHITE, (int(screen_x), int(screen_y)), int(size * 1.5), 2)
-
-        # Jeśli statek się porusza, rysuj linię do celu
-        if ship.is_moving and ship.target_x and ship.target_y:
+            # Rysuj linię do celu
             target_screen_x, target_screen_y = self.camera.world_to_screen(ship.target_x, ship.target_y)
-            pygame.draw.line(self.screen, empire_color, (screen_x, screen_y), (target_screen_x, target_screen_y), 1)
+            # Linia przerywaną (dla lepszego wyglądu)
+            line_color = tuple(max(0, c - 60) for c in empire_color)
+            pygame.draw.line(self.screen, line_color,
+                           (int(screen_x), int(screen_y)),
+                           (int(target_screen_x), int(target_screen_y)), 1)
+
+        # Rysuj statek z zaawansowanym rendererem
+        ShipRenderer.draw_ship_advanced(
+            self.screen,
+            int(screen_x),
+            int(screen_y),
+            ship.ship_type,
+            empire_color,
+            zoom=self.camera.zoom,
+            is_selected=is_selected,
+            is_moving=ship.is_moving,
+            rotation=rotation
+        )
 
     def draw_ships(self, ships: list[Ship], empires: dict[int, tuple], selected_ships: list[Ship] = None):
         """Rysuj wszystkie statki"""
