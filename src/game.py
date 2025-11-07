@@ -12,7 +12,8 @@ from src.ui.renderer import Renderer
 from src.ui.widgets import Panel, Button, draw_text
 from src.ui.screens.planet_screen import PlanetScreen
 from src.ui.screens.research_screen import ResearchScreen
-from src.combat import CombatManager, CombatEffectsManager
+from src.ui.screens.battle_screen import BattleScreen
+from src.combat import CombatManager, CombatEffectsManager, TacticalBattle
 from src.ai import AIController
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
@@ -50,6 +51,10 @@ class Game:
         self.combat_manager = CombatManager()
         self.combat_effects = CombatEffectsManager()
         self.last_turn_battles = []  # Bitwy z ostatniej tury (do wyświetlenia)
+
+        # Tactical combat
+        self.tactical_battle: Optional[TacticalBattle] = None
+        self.battle_screen: Optional[BattleScreen] = None
 
         # AI system
         self.ai_controllers: dict[int, AIController] = {}  # empire_id -> AIController
@@ -277,6 +282,28 @@ class Game:
     def handle_events(self):
         """Obsługa zdarzeń"""
         mouse_pos = pygame.mouse.get_pos()
+
+        # Jeśli w tactical combat, obsługuj tylko battle screen
+        if self.battle_screen:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        # Zakończ bitwę (wycofanie)
+                        if self.tactical_battle and not self.tactical_battle.battle_ended:
+                            self.battle_screen._on_retreat()
+                        # Jeśli bitwa się skończyła, zamknij ekran
+                        if self.tactical_battle and self.tactical_battle.battle_ended:
+                            self._end_tactical_battle()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # LPM
+                        self.battle_screen.handle_click(mouse_pos)
+
+                        # Sprawdź czy bitwa się skończyła
+                        if self.tactical_battle.battle_ended:
+                            self._end_tactical_battle()
+            return
 
         # Aktualizuj stan przycisków
         self.end_turn_button.update(mouse_pos)
@@ -618,6 +645,11 @@ class Game:
         # W trybie turowym update() nie przesuwa statków
         # Ruch odbywa się tylko podczas end_turn()
 
+        # Jeśli w tactical combat, aktualizuj battle screen
+        if self.battle_screen:
+            self.battle_screen.update(dt)
+            return
+
         # Aktualizuj efekty walki (animacje)
         self.combat_effects.update(dt)
 
@@ -662,6 +694,17 @@ class Game:
                 self.selected_ships.remove(ship)
 
         # 1.5. Przetwarzanie bitew (combat system)
+        # NOWA LOGIKA: Wykrywaj bitwy i sprawdź czy gracz jest zaangażowany
+        player_battle = self._detect_player_battles()
+
+        if player_battle:
+            # Gracz jest w bitwie - uruchom tactical combat!
+            print("⚔️ BITWA! Przygotuj się do walki taktycznej...")
+            self._start_tactical_battle(player_battle)
+            # Przerwij end_turn - zostanie wznowiony po zakończeniu bitwy
+            return
+
+        # Jeśli gracz nie jest w bitwie, przetwórz wszystkie bitwy normalnie (AI vs AI)
         combat_stats = self.combat_manager.process_combat_turn(self.ships, self.empires)
 
         # Zapisz bitwy dla UI
@@ -886,8 +929,181 @@ class Game:
                     print(f"   Produkcja: -{penalty_prod*100:.0f}%, Nauka: -{penalty_sci*100:.0f}%")
                     print(f"   Buduj elektrownie lub zmniejsz populację!")
 
+    def _detect_player_battles(self):
+        """
+        Wykryj bitwy z udziałem gracza
+        Returns: dict z info o bitwie lub None
+        """
+        from src.combat.battle import Battle
+
+        # Zbuduj słownik relacji
+        relations = {}
+        for i, emp1 in enumerate(self.empires):
+            for j, emp2 in enumerate(self.empires):
+                if i != j:
+                    relation_key = (min(emp1.id, emp2.id), max(emp1.id, emp2.id))
+                    relations[relation_key] = emp1.get_relation(emp2.id)
+
+        # Wykryj wszystkie bitwy
+        detected_battles = Battle.detect_battles(self.ships, relations)
+
+        # Znajdź pierwszą bitwę gracza
+        for battle in detected_battles:
+            if (battle.attacker_empire_id == self.player_empire.id or
+                battle.defender_empire_id == self.player_empire.id):
+                # Znaleźliśmy bitwę gracza!
+                return {
+                    'attacker_empire_id': battle.attacker_empire_id,
+                    'defender_empire_id': battle.defender_empire_id,
+                    'attacker_ships': battle.attacker_ships,
+                    'defender_ships': battle.defender_ships,
+                    'location': battle.location
+                }
+
+        return None
+
+    def _start_tactical_battle(self, battle_info):
+        """Uruchom tactical combat dla gracza"""
+        # Stwórz tactical battle
+        self.tactical_battle = TacticalBattle(
+            attacker_empire_id=battle_info['attacker_empire_id'],
+            defender_empire_id=battle_info['defender_empire_id'],
+            attacker_ships=battle_info['attacker_ships'],
+            defender_ships=battle_info['defender_ships'],
+            location=battle_info['location'],
+            player_empire_id=self.player_empire.id
+        )
+
+        # Stwórz battle screen
+        self.battle_screen = BattleScreen(self.screen, self.tactical_battle)
+
+        # Rozpocznij tury AI jeśli to konieczne
+        self.battle_screen._process_ai_turns()
+
+    def _end_tactical_battle(self):
+        """Zakończ tactical combat i kontynuuj end_turn"""
+        if not self.battle_screen or not self.tactical_battle:
+            return
+
+        # Pobierz wynik
+        result = self.battle_screen.battle_result or self.tactical_battle._create_result()
+
+        # Zastosuj wynik bitwy - usuń zniszczone statki
+        for ship in result.attacker_survivors + result.defender_survivors:
+            if not ship.is_alive:
+                if ship in self.ships:
+                    self.ships.remove(ship)
+                if ship in self.selected_ships:
+                    self.selected_ships.remove(ship)
+
+        # Dodaj do historii bitew
+        self.last_turn_battles = [result]
+
+        # Wyświetl wynik
+        if result.attacker_won:
+            winner_name = next((e.name for e in self.empires if e.id == result.attacker_empire_id), "Nieznany")
+            loser_name = next((e.name for e in self.empires if e.id == result.defender_empire_id), "Nieznany")
+        else:
+            winner_name = next((e.name for e in self.empires if e.id == result.defender_empire_id), "Nieznany")
+            loser_name = next((e.name for e in self.empires if e.id == result.attacker_empire_id), "Nieznany")
+
+        print(f"   🏆 {winner_name} pokonał {loser_name} ({result.rounds} rund)")
+        print(f"      Straty: {result.attacker_ships_destroyed} vs {result.defender_ships_destroyed}")
+
+        # Wyczyść tactical combat state
+        self.tactical_battle = None
+        self.battle_screen = None
+
+        # Kontynuuj resztę end_turn - przetwórz pozostałe bitwy AI vs AI
+        self._continue_end_turn_after_battle()
+
+    def _continue_end_turn_after_battle(self):
+        """Kontynuuj end_turn po zakończeniu tactical combat"""
+        # Przetwórz pozostałe bitwy (AI vs AI) - bez gracza
+        combat_stats = self.combat_manager.process_combat_turn(self.ships, self.empires)
+
+        if combat_stats['battles_resolved'] > 0:
+            print(f"⚔️ Rozwiązano {combat_stats['battles_resolved']} dodatkowych bitew AI!")
+
+        # Kontynuuj z AI, wzrostem populacji etc.
+        # (kod skopiowany z oryginalnego end_turn - linie ~736+)
+
+        # 1.7. AI podejmuje decyzje
+        for empire_id, ai_controller in self.ai_controllers.items():
+            ai_controller.make_turn_decisions(self.ships)
+
+        # 2. Aktualizacja zasobów imperii
+        self._update_empire_resources()
+
+        # 3. Aplikuj efekty deficytu
+        self._apply_deficit_effects()
+
+        # 4. Przetwarzanie badań
+        for empire in self.empires:
+            if empire.current_research and empire.total_science > 0:
+                completed = empire.add_research_points(empire.total_science)
+                if completed:
+                    tech_id = list(empire.researched_technologies)[-1]
+                    tech = TECHNOLOGIES.get(tech_id)
+                    if tech and empire.is_player:
+                        print(f"🔬 Odkryto technologię: {tech.name}!")
+
+        # 5. Wzrost populacji i produkcja
+        self._process_planet_production()
+
+    def _process_planet_production(self):
+        """Przetwórz produkcję na wszystkich planetach (wydzielone z end_turn)"""
+        for system in self.galaxy.systems:
+            for planet in system.planets:
+                if planet.is_colonized:
+                    planet.grow_population()
+
+                    # Przetwórz produkcję
+                    completed_item = planet.process_production()
+                    if completed_item:
+                        if completed_item.item_type == "ship" and completed_item.ship_type:
+                            # Stwórz nowy statek
+                            new_ship = Ship.create_ship(
+                                ship_id=self.next_ship_id,
+                                ship_type=completed_item.ship_type,
+                                owner_id=planet.owner_id,
+                                x=system.x,
+                                y=system.y
+                            )
+                            self.ships.append(new_ship)
+                            self.next_ship_id += 1
+
+                            empire = next((e for e in self.empires if e.id == planet.owner_id), None)
+                            if empire and empire.is_player:
+                                print(f"✓ {completed_item.ship_type.value} #{new_ship.id} wyprodukowany w systemie {system.name}!")
+                        elif completed_item.item_type == "building" and completed_item.building_id:
+                            # Dodaj budynek do planety
+                            building_def = BUILDINGS.get(completed_item.building_id)
+                            if building_def:
+                                from src.models.planet import Building
+                                new_building = Building(
+                                    building_id=building_def.id,
+                                    name=building_def.name,
+                                    production_bonus=building_def.production_bonus,
+                                    science_bonus=building_def.science_bonus,
+                                    food_bonus=building_def.food_bonus,
+                                    energy_bonus=building_def.energy_bonus,
+                                    upkeep_energy=building_def.upkeep_energy
+                                )
+                                planet.add_building(new_building)
+
+                                empire = next((e for e in self.empires if e.id == planet.owner_id), None)
+                                if empire and empire.is_player:
+                                    print(f"🏗️ {building_def.name} zbudowany na {planet.name}!")
+
     def render(self, dt=0.016):
         """Renderuj grę"""
+        # Jeśli w tactical combat, renderuj tylko battle screen
+        if self.battle_screen:
+            self.battle_screen.render()
+            pygame.display.flip()
+            return
+
         self.renderer.clear()
         self.renderer.draw_background(dt)
 
