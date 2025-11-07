@@ -11,6 +11,7 @@ from src.ui.renderer import Renderer
 from src.ui.widgets import Panel, Button, draw_text
 from src.ui.screens.planet_screen import PlanetScreen
 from src.ui.screens.research_screen import ResearchScreen
+from src.combat import CombatManager, CombatEffectsManager
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
@@ -42,6 +43,10 @@ class Game:
         self.ships: list[Ship] = []
         self.current_turn = 1
         self.next_ship_id = 0
+
+        # Combat system
+        self.combat_manager = CombatManager()
+        self.combat_effects = CombatEffectsManager()
 
         # UI
         self.selected_system: Optional[StarSystem] = None
@@ -130,6 +135,13 @@ class Game:
             home_system = self.galaxy.find_system_by_id(self.player_empire.home_system_id)
             if home_system:
                 self.renderer.camera.center_on(home_system.x, home_system.y)
+
+        # Ustaw relacje dyplomatyczne (wszyscy w stanie wojny)
+        print("Ustawianie relacji dyplomatycznych...")
+        for i, emp1 in enumerate(self.empires):
+            for j, emp2 in enumerate(self.empires):
+                if i != j:
+                    emp1.set_relation(emp2.id, "war")
 
         print("Gra gotowa!")
 
@@ -506,7 +518,9 @@ class Game:
         """Aktualizuj stan gry (teraz tylko wizualizacja)"""
         # W trybie turowym update() nie przesuwa statków
         # Ruch odbywa się tylko podczas end_turn()
-        pass
+
+        # Aktualizuj efekty walki (animacje)
+        self.combat_effects.update(dt)
 
     def end_turn(self):
         """Zakończ turę"""
@@ -542,6 +556,71 @@ class Game:
             self.ships.remove(ship)
             if ship in self.selected_ships:
                 self.selected_ships.remove(ship)
+
+        # 1.5. Przetwarzanie bitew (combat system)
+        combat_stats = self.combat_manager.process_combat_turn(self.ships, self.empires)
+
+        # Wyświetl informacje o bitwach
+        if combat_stats['battles_resolved'] > 0:
+            print(f"⚔️ Rozwiązano {combat_stats['battles_resolved']} bitew!")
+            print(f"   Zniszczono {combat_stats['total_ships_destroyed']} statków")
+
+            # Generuj efekty wizualne dla każdej bitwy
+            for result in combat_stats['results']:
+                # Dodaj eksplozje dla zniszczonych statków
+                # (używamy pozycji ocalałych statków jako aproksymacji pola bitwy)
+                all_survivors = result.attacker_survivors + result.defender_survivors
+
+                if all_survivors:
+                    # Pozycja bitwy (średnia pozycja ocalałych)
+                    avg_x = sum(s.x for s in all_survivors) / len(all_survivors)
+                    avg_y = sum(s.y for s in all_survivors) / len(all_survivors)
+                else:
+                    # Jeśli wszyscy zginęli, użyj pozycji z pierwszego atakującego
+                    # (nie mamy już dostępu do statków, więc używamy domyślnej)
+                    avg_x = 0
+                    avg_y = 0
+
+                # Dodaj eksplozje dla zniszczonych statków
+                total_destroyed = result.attacker_ships_destroyed + result.defender_ships_destroyed
+                for i in range(total_destroyed):
+                    # Losowa pozycja wokół centrum bitwy
+                    import random
+                    offset_x = random.uniform(-50, 50)
+                    offset_y = random.uniform(-50, 50)
+                    self.combat_effects.add_explosion(avg_x + offset_x, avg_y + offset_y, size=40)
+
+                # Dodaj lasery między statkami (symulacja ataków)
+                # Połącz atakujących z obrońcami
+                attackers = result.attacker_survivors[:3]  # Max 3 dla wydajności
+                defenders = result.defender_survivors[:3]
+
+                for attacker in attackers:
+                    if defenders:
+                        target = random.choice(defenders)
+                        # Kolor lasera zależy od imperium
+                        laser_color = next((e.color for e in self.empires if e.id == attacker.owner_id), (100, 200, 255))
+                        self.combat_effects.add_laser_beam(
+                            attacker.x, attacker.y,
+                            target.x, target.y,
+                            color=laser_color
+                        )
+
+            # Wyświetl szczegóły bitew dla gracza
+            for result in combat_stats['results']:
+                if result.attacker_empire_id == self.player_empire.id or result.defender_empire_id == self.player_empire.id:
+                    attacker_name = next((e.name for e in self.empires if e.id == result.attacker_empire_id), "Nieznany")
+                    defender_name = next((e.name for e in self.empires if e.id == result.defender_empire_id), "Nieznany")
+
+                    if result.attacker_won:
+                        winner = attacker_name
+                        loser = defender_name
+                    else:
+                        winner = defender_name
+                        loser = attacker_name
+
+                    print(f"   🏆 {winner} pokonał {loser} ({result.rounds} rund)")
+                    print(f"      Straty: {result.attacker_ships_destroyed} vs {result.defender_ships_destroyed}")
 
         # 2. Aktualizacja zasobów imperii (przed wzrostem populacji!)
         self._update_empire_resources()
@@ -711,6 +790,9 @@ class Game:
 
         # Rysuj statki
         self.renderer.draw_ships(self.ships, empire_colors, self.selected_ships)
+
+        # Rysuj efekty walki (lasery, eksplozje)
+        self.combat_effects.draw(self.screen, self.renderer.camera)
 
         # Podświetl wybrany system
         if self.selected_system:
