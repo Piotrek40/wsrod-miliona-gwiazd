@@ -47,6 +47,7 @@ class Game:
         # Combat system
         self.combat_manager = CombatManager()
         self.combat_effects = CombatEffectsManager()
+        self.last_turn_battles = []  # Bitwy z ostatniej tury (do wyświetlenia)
 
         # UI
         self.selected_system: Optional[StarSystem] = None
@@ -560,6 +561,9 @@ class Game:
         # 1.5. Przetwarzanie bitew (combat system)
         combat_stats = self.combat_manager.process_combat_turn(self.ships, self.empires)
 
+        # Zapisz bitwy dla UI
+        self.last_turn_battles = combat_stats['results']
+
         # Wyświetl informacje o bitwach
         if combat_stats['battles_resolved'] > 0:
             print(f"⚔️ Rozwiązano {combat_stats['battles_resolved']} bitew!")
@@ -929,8 +933,51 @@ class Game:
                      WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_research + 118,
                      self.renderer.font_small, hint_color)
 
+        # === SEKCJA 3.5: BITWY (jeśli były) ===
+        y_battles = 280
+        if self.last_turn_battles:
+            draw_text(self.screen, "═══ Bitwy ═══",
+                     WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_battles,
+                     self.renderer.font_small, Colors.UI_HIGHLIGHT)
+
+            y_battle_item = y_battles + 20
+            for result in self.last_turn_battles[:2]:  # Max 2 bitwy (żeby się zmieściło)
+                # Sprawdź czy gracz uczestniczył
+                player_involved = (result.attacker_empire_id == self.player_empire.id or
+                                 result.defender_empire_id == self.player_empire.id)
+
+                if player_involved:
+                    # Nazwy imperiów
+                    attacker_name = next((e.name for e in self.empires if e.id == result.attacker_empire_id), "?")
+                    defender_name = next((e.name for e in self.empires if e.id == result.defender_empire_id), "?")
+
+                    # Skróć nazwy
+                    attacker_short = attacker_name[:10]
+                    defender_short = defender_name[:10]
+
+                    # Kto wygrał
+                    if result.attacker_won:
+                        winner_short = attacker_short
+                        battle_color = Colors.UI_TEXT if result.attacker_empire_id == self.player_empire.id else (255, 100, 100)
+                    else:
+                        winner_short = defender_short
+                        battle_color = Colors.UI_TEXT if result.defender_empire_id == self.player_empire.id else (255, 100, 100)
+
+                    # Rysuj
+                    battle_text = f"⚔️ {attacker_short} vs {defender_short}"
+                    draw_text(self.screen, battle_text,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_battle_item,
+                             self.renderer.font_small, battle_color)
+
+                    result_text = f"   🏆 {winner_short} (-{result.attacker_ships_destroyed}/{result.defender_ships_destroyed})"
+                    draw_text(self.screen, result_text,
+                             WINDOW_WIDTH - PANEL_WIDTH + PANEL_PADDING, y_battle_item + 15,
+                             self.renderer.font_small, Colors.LIGHT_GRAY)
+
+                    y_battle_item += 40
+
         # === SEKCJA 4: GŁÓWNA (Statki/Systemy) - największa sekcja ===
-        y_main = 350
+        y_main = 380  # Przesunięte w dół o 30px dla sekcji bitew
 
         # Informacje o wybranych statkach
         if self.selected_ships:
