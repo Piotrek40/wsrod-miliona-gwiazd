@@ -175,18 +175,30 @@ class Game:
 
         print("\n🏴‍☠️ TESTOWY SCENARIUSZ COMBAT:")
 
-        # 1. Stwórz pirackiego Cruisera w pobliżu (dystans ~150 jednostek)
-        pirate_x = player_home.x + 150
-        pirate_y = player_home.y + 50
+        # 1. Stwórz pirackie imperium (bez AI controllera, więc piraci stoją w miejscu)
+        from src.models.empire import Empire
+        pirate_empire = Empire(
+            id=999,  # Specjalne ID dla piratów
+            name="🏴‍☠️ Piraci",
+            color=(80, 80, 80),
+            is_player=False
+        )
+        self.empires.append(pirate_empire)
 
-        # Pirat nie należy do żadnego imperium - użyj ID -1 (neutralny/pirat)
-        # Ale musimy go dodać do jakiegoś imperium żeby combat działał, użyjmy pierwszego AI
-        pirate_empire_id = self.empires[1].id if len(self.empires) > 1 else 0
+        # Ustaw piratów w stanie wojny z graczem
+        relation_key = (min(self.player_empire.id, pirate_empire.id),
+                       max(self.player_empire.id, pirate_empire.id))
+        self.empires_relations[relation_key] = "war"
+
+        # 2. Stwórz pirackiego Cruisera BLISKO systemu gracza (dystans ~70 jednostek)
+        # Zmniejszony z 150 na 70 żeby był widoczny
+        pirate_x = player_home.x + 60
+        pirate_y = player_home.y + 40
 
         pirate_cruiser = Ship.create_ship(
             ship_id=self.next_ship_id,
             ship_type=ShipType.CRUISER,
-            owner_id=pirate_empire_id,
+            owner_id=pirate_empire.id,
             x=pirate_x,
             y=pirate_y
         )
@@ -197,7 +209,11 @@ class Game:
         print(f"  • Piracki Cruiser ({pirate_cruiser.name}) @ ({int(pirate_x)}, {int(pirate_y)})")
         print(f"    HP: {pirate_cruiser.max_hp}, ATK: {pirate_cruiser.attack}, DEF: {pirate_cruiser.defense}")
 
-        # 2. Dodaj bojowy Cruiser dla gracza w jego systemie
+        # Oblicz rzeczywisty dystans
+        dist = ((pirate_x - player_home.x)**2 + (pirate_y - player_home.y)**2)**0.5
+        print(f"    Dystans od Twojego systemu: {int(dist)} jednostek")
+
+        # 3. Dodaj bojowy Cruiser dla gracza w jego systemie
         player_cruiser = Ship.create_ship(
             ship_id=self.next_ship_id,
             ship_type=ShipType.CRUISER,
@@ -212,7 +228,7 @@ class Game:
         print(f"  • Twój Cruiser ({player_cruiser.name}) @ ({int(player_home.x)}, {int(player_home.y)})")
         print(f"    HP: {player_cruiser.max_hp}, ATK: {player_cruiser.attack}, DEF: {player_cruiser.defense}")
         print(f"\n  💡 Wyślij swój Cruiser do pirata (PPM na pozycję ~{int(pirate_x)}, {int(pirate_y)})")
-        print(f"     Gdy będą blisko, bitwa rozpocznie się automatycznie!")
+        print(f"     Gdy będą w zasięgu 100 jednostek, bitwa rozpocznie się automatycznie!")
 
     def _create_starting_ships(self, empire: Empire, system: StarSystem):
         """Stwórz początkowe statki dla imperium"""

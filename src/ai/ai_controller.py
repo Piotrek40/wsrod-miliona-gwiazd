@@ -275,8 +275,8 @@ class AIController:
         available = []
         for building_id, building_def in BUILDINGS.items():
             # Sprawdź czy AI ma wymagane tech
-            if building_def.required_tech:
-                if building_def.required_tech not in self.empire.researched_technologies:
+            if building_def.requires_tech:
+                if building_def.requires_tech not in self.empire.researched_technologies:
                     continue
             available.append(building_id)
         return available
