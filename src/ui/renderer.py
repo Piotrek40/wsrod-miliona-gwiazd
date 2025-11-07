@@ -10,6 +10,7 @@ from src.ui.camera import Camera
 from src.config import Colors, WINDOW_WIDTH, WINDOW_HEIGHT, BACKGROUND_STARS
 from src.graphics.starfield import Starfield
 from src.graphics.planet_renderer import PlanetRenderer, get_planet_render_flags
+from src.graphics.planet_textures import PlanetTextureGenerator
 
 
 class Renderer:
@@ -101,19 +102,63 @@ class Renderer:
             base_size = 4 if self.camera.zoom < 1.0 else planet.size
             planet_radius = max(3, int(base_size * self.camera.zoom / 2))
 
-            # === NOWY RENDERER z gradientami i efektami! ===
-            has_atmosphere, has_rings = get_planet_render_flags(planet.planet_type)
+            # === REALISTYCZNE TEKSTURY PLANET! ===
+            # Generuj unikalny seed z nazwy planety
+            seed = hash(planet.name) % 10000
 
-            PlanetRenderer.draw_planet_advanced(
-                self.screen,
-                int(planet_screen_x),
-                int(planet_screen_y),
-                planet_radius,
-                planet.planet_type,
-                planet.color,
-                has_atmosphere=has_atmosphere,
-                has_rings=has_rings
-            )
+            # Pobierz lub wygeneruj teksturę
+            texture_size = planet_radius * 2
+            if texture_size >= 16:  # Dla większych planet używaj tekstur
+                texture = PlanetTextureGenerator.get_or_generate_texture(
+                    planet_id=planet.name,
+                    planet_type=planet.planet_type,
+                    size=texture_size,
+                    seed=seed
+                )
+
+                # Skaluj jeśli potrzeba
+                if texture.get_width() != texture_size:
+                    texture = pygame.transform.smoothscale(texture, (texture_size, texture_size))
+
+                # Rysuj teksturę
+                texture_x = int(planet_screen_x - planet_radius)
+                texture_y = int(planet_screen_y - planet_radius)
+                self.screen.blit(texture, (texture_x, texture_y))
+
+                # Dodaj efekty (glow, atmosfera) na wierzchu
+                has_atmosphere, has_rings = get_planet_render_flags(planet.planet_type)
+
+                # Glow
+                PlanetRenderer._draw_glow(self.screen, int(planet_screen_x), int(planet_screen_y),
+                                         planet_radius, planet.color)
+
+                # Atmosfera
+                if has_atmosphere and planet_radius > 5:
+                    PlanetRenderer._draw_atmosphere(self.screen, int(planet_screen_x), int(planet_screen_y),
+                                                    planet_radius)
+
+                # Pierścienie
+                if has_rings and planet_radius > 8:
+                    PlanetRenderer._draw_rings(self.screen, int(planet_screen_x), int(planet_screen_y),
+                                               planet_radius, planet.color)
+
+                # Highlight
+                PlanetRenderer._draw_highlight(self.screen, int(planet_screen_x), int(planet_screen_y),
+                                               planet_radius)
+            else:
+                # Dla małych planet - stary renderer (prosty gradient)
+                has_atmosphere, has_rings = get_planet_render_flags(planet.planet_type)
+
+                PlanetRenderer.draw_planet_advanced(
+                    self.screen,
+                    int(planet_screen_x),
+                    int(planet_screen_y),
+                    planet_radius,
+                    planet.planet_type,
+                    planet.color,
+                    has_atmosphere=has_atmosphere,
+                    has_rings=has_rings
+                )
 
             # Jeśli skolonizowana, rysuj obramowanie kolorem właściciela
             if planet.is_colonized:
