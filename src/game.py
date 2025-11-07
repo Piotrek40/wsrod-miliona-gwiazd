@@ -2,6 +2,7 @@
 Główna logika gry
 """
 import pygame
+import random
 from typing import Optional
 from src.models.galaxy import Galaxy, StarSystem
 from src.models.empire import Empire
@@ -692,7 +693,6 @@ class Game:
                 total_destroyed = result.attacker_ships_destroyed + result.defender_ships_destroyed
                 for i in range(total_destroyed):
                     # Losowa pozycja wokół centrum bitwy
-                    import random
                     offset_x = random.uniform(-50, 50)
                     offset_y = random.uniform(-50, 50)
                     self.combat_effects.add_explosion(avg_x + offset_x, avg_y + offset_y, size=40)
