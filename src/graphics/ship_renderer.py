@@ -1,24 +1,25 @@
 """
-Zaawansowany renderer statków z 3D-style sprites i efektami
+Zaawansowany renderer statków z realistycznymi detalami i efektami
 """
 import pygame
 import math
+import random
 from src.config import ShipType
 
 
 class ShipRenderer:
     """
-    Renderer dla realistycznych statków z cieniowaniem i efektami
+    Renderer dla realistycznych statków z wieloma detalami
     """
 
     # Bazowe rozmiary dla różnych typów statków
     SHIP_SIZES = {
-        ShipType.SCOUT: 8,
-        ShipType.FIGHTER: 12,
-        ShipType.CRUISER: 18,
-        ShipType.BATTLESHIP: 28,
-        ShipType.COLONY_SHIP: 16,
-        ShipType.TRANSPORT: 14,
+        ShipType.SCOUT: 10,
+        ShipType.FIGHTER: 14,
+        ShipType.CRUISER: 22,
+        ShipType.BATTLESHIP: 32,
+        ShipType.COLONY_SHIP: 18,
+        ShipType.TRANSPORT: 16,
     }
 
     @staticmethod
@@ -27,7 +28,7 @@ class ShipRenderer:
                           zoom: float = 1.0, is_selected: bool = False,
                           is_moving: bool = False, rotation: float = 0.0):
         """
-        Rysuj statek z zaawansowanymi efektami
+        Rysuj statek z zaawansowanymi efektami i detalami
 
         Args:
             screen: Powierzchnia pygame do rysowania
@@ -43,21 +44,17 @@ class ShipRenderer:
 
         # Wybierz metodę rysowania w zależności od typu
         if ship_type == ShipType.SCOUT:
-            ShipRenderer._draw_scout(screen, x, y, size, empire_color, rotation)
+            ShipRenderer._draw_scout(screen, x, y, size, empire_color, rotation, is_moving)
         elif ship_type == ShipType.FIGHTER:
-            ShipRenderer._draw_fighter(screen, x, y, size, empire_color, rotation)
+            ShipRenderer._draw_fighter(screen, x, y, size, empire_color, rotation, is_moving)
         elif ship_type == ShipType.CRUISER:
-            ShipRenderer._draw_cruiser(screen, x, y, size, empire_color, rotation)
+            ShipRenderer._draw_cruiser(screen, x, y, size, empire_color, rotation, is_moving)
         elif ship_type == ShipType.BATTLESHIP:
-            ShipRenderer._draw_battleship(screen, x, y, size, empire_color, rotation)
+            ShipRenderer._draw_battleship(screen, x, y, size, empire_color, rotation, is_moving)
         elif ship_type == ShipType.COLONY_SHIP:
-            ShipRenderer._draw_colony_ship(screen, x, y, size, empire_color, rotation)
+            ShipRenderer._draw_colony_ship(screen, x, y, size, empire_color, rotation, is_moving)
         elif ship_type == ShipType.TRANSPORT:
-            ShipRenderer._draw_transport(screen, x, y, size, empire_color, rotation)
-
-        # Efekt silników (gdy statek się porusza)
-        if is_moving and size > 4:
-            ShipRenderer._draw_engine_glow(screen, x, y, size, rotation)
+            ShipRenderer._draw_transport(screen, x, y, size, empire_color, rotation, is_moving)
 
         # Podświetlenie zaznaczenia
         if is_selected:
@@ -71,69 +68,116 @@ class ShipRenderer:
         return (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
 
     @staticmethod
-    def _draw_scout(screen: pygame.Surface, x: int, y: int, size: float,
-                    color: tuple, rotation: float):
-        """
-        Rysuj Scout - mały, szybki, trójkątny
-        """
-        # Punkty trójkąta (względem środka)
-        points_local = [
-            (0, -size),              # Czubek (przód)
-            (-size * 0.4, size * 0.5),  # Lewy tył
-            (size * 0.4, size * 0.5),   # Prawy tył
+    def _draw_detail_rect(screen: pygame.Surface, center_x: int, center_y: int,
+                         local_x: float, local_y: float, width: float, height: float,
+                         color: tuple, rotation: float, outline: bool = False):
+        """Pomocnicza funkcja do rysowania małych prostokątów (detale)"""
+        # Rogi prostokąta (lokalnie)
+        corners_local = [
+            (local_x - width/2, local_y - height/2),
+            (local_x + width/2, local_y - height/2),
+            (local_x + width/2, local_y + height/2),
+            (local_x - width/2, local_y + height/2),
         ]
 
-        # Obróć punkty
-        points = []
-        for px, py in points_local:
-            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
-            points.append((x + rx, y + ry))
+        # Obróć i przenieś do pozycji świata
+        corners = []
+        for cx, cy in corners_local:
+            rx, ry = ShipRenderer._rotate_point(cx, cy, rotation)
+            corners.append((center_x + rx, center_y + ry))
 
-        # Ciemniejszy outline (cień 3D)
-        darker = tuple(max(0, c - 60) for c in color)
-        pygame.draw.polygon(screen, darker, points, 2)
+        if outline:
+            pygame.draw.polygon(screen, color, corners, 1)
+        else:
+            pygame.draw.polygon(screen, color, corners)
+
+    @staticmethod
+    def _draw_scout(screen: pygame.Surface, x: int, y: int, size: float,
+                    color: tuple, rotation: float, is_moving: bool):
+        """
+        Scout - mały, szybki, opływowy statek zwiadowczy
+        """
+        # KORPUS GŁÓWNY - wydłużony kształt strzałki
+        hull_points_local = [
+            (0, -size * 0.9),              # Ostry nos
+            (-size * 0.25, -size * 0.4),   # Górna lewa
+            (-size * 0.35, size * 0.1),    # Środek lewa
+            (-size * 0.2, size * 0.6),     # Tył lewa
+            (0, size * 0.5),               # Tył środek
+            (size * 0.2, size * 0.6),      # Tył prawa
+            (size * 0.35, size * 0.1),     # Środek prawa
+            (size * 0.25, -size * 0.4),    # Górna prawa
+        ]
+
+        hull_points = []
+        for px, py in hull_points_local:
+            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
+            hull_points.append((x + rx, y + ry))
+
+        # Ciemny outline
+        darker = tuple(max(0, c - 80) for c in color)
+        pygame.draw.polygon(screen, darker, hull_points, 2)
 
         # Wypełnienie
-        pygame.draw.polygon(screen, color, points)
+        pygame.draw.polygon(screen, color, hull_points)
 
-        # Jasny highlight (górna część - pseudo 3D)
-        if size > 4:
-            brighter = tuple(min(255, c + 80) for c in color)
-            highlight_points = [
-                points[0],  # Czubek
-                ((points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2),
-                ((points[0][0] + points[2][0]) / 2, (points[0][1] + points[2][1]) / 2),
-            ]
-            pygame.draw.polygon(screen, brighter, highlight_points)
+        if size > 6:
+            # KOKPIT (jasny)
+            brighter = tuple(min(255, c + 100) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.6,
+                                          size * 0.15, size * 0.2, brighter, rotation)
+
+            # SILNIKI (2 małe)
+            engine_color = (100, 100, 120)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.15, size * 0.45,
+                                          size * 0.12, size * 0.15, engine_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.15, size * 0.45,
+                                          size * 0.12, size * 0.15, engine_color, rotation)
+
+            # Engine glow (gdy się porusza)
+            if is_moving:
+                ShipRenderer._draw_engine_glow_dual(screen, x, y, size, rotation,
+                                                   -size * 0.15, size * 0.15, size * 0.52)
+
+            # SENSORY (małe kropki)
+            if size > 8:
+                sensor_color = (150, 200, 255)
+                for sensor_y in [-size * 0.3, 0, size * 0.3]:
+                    sx_local, sy_local = ShipRenderer._rotate_point(size * 0.3, sensor_y, rotation)
+                    pygame.draw.circle(screen, sensor_color, (int(x + sx_local), int(y + sy_local)), 1)
 
     @staticmethod
     def _draw_fighter(screen: pygame.Surface, x: int, y: int, size: float,
-                     color: tuple, rotation: float):
+                     color: tuple, rotation: float, is_moving: bool):
         """
-        Rysuj Fighter - średni, ostry kształt ze skrzydłami
+        Fighter - zwrotny statek bojowy ze skrzydłami i uzbrojeniem
         """
-        # Korpus główny (wydłużony diament)
+        # KORPUS CENTRALNY
         hull_points_local = [
-            (0, -size * 0.9),           # Przód
-            (-size * 0.3, 0),            # Lewy bok
-            (0, size * 0.5),             # Tył
-            (size * 0.3, 0),             # Prawy bok
+            (0, -size * 0.85),             # Nos
+            (-size * 0.2, -size * 0.3),    # Górny lewy
+            (-size * 0.25, size * 0.3),    # Środek lewy
+            (0, size * 0.5),               # Tył
+            (size * 0.25, size * 0.3),     # Środek prawy
+            (size * 0.2, -size * 0.3),     # Górny prawy
         ]
 
-        # Skrzydła
+        # SKRZYDŁA - asymetryczne, bardziej realistyczne
         wing_left_local = [
-            (-size * 0.3, -size * 0.2),
-            (-size * 0.8, 0),
-            (-size * 0.3, size * 0.2),
+            (-size * 0.25, -size * 0.25),
+            (-size * 0.7, -size * 0.05),
+            (-size * 0.75, size * 0.1),
+            (-size * 0.25, size * 0.25),
         ]
 
         wing_right_local = [
-            (size * 0.3, -size * 0.2),
-            (size * 0.8, 0),
-            (size * 0.3, size * 0.2),
+            (size * 0.25, -size * 0.25),
+            (size * 0.7, -size * 0.05),
+            (size * 0.75, size * 0.1),
+            (size * 0.25, size * 0.25),
         ]
 
-        # Obróć wszystkie punkty
+        # Obróć punkty
         hull_points = []
         for px, py in hull_points_local:
             rx, ry = ShipRenderer._rotate_point(px, py, rotation)
@@ -150,272 +194,415 @@ class ShipRenderer:
             wing_right.append((x + rx, y + ry))
 
         # Rysuj skrzydła (ciemniejsze)
-        wing_color = tuple(max(0, c - 40) for c in color)
+        wing_color = tuple(max(0, c - 50) for c in color)
+        darker = tuple(max(0, c - 80) for c in color)
+
         pygame.draw.polygon(screen, wing_color, wing_left)
+        pygame.draw.polygon(screen, darker, wing_left, 1)
         pygame.draw.polygon(screen, wing_color, wing_right)
+        pygame.draw.polygon(screen, darker, wing_right, 1)
 
         # Rysuj korpus
-        darker = tuple(max(0, c - 60) for c in color)
         pygame.draw.polygon(screen, darker, hull_points, 2)
         pygame.draw.polygon(screen, color, hull_points)
 
-        # Highlight (przednia część)
-        if size > 6:
-            brighter = tuple(min(255, c + 80) for c in color)
-            highlight_points = [
-                hull_points[0],
-                ((hull_points[0][0] + hull_points[1][0]) / 2,
-                 (hull_points[0][1] + hull_points[1][1]) / 2),
-                ((hull_points[0][0] + hull_points[3][0]) / 2,
-                 (hull_points[0][1] + hull_points[3][1]) / 2),
-            ]
-            pygame.draw.polygon(screen, brighter, highlight_points)
+        if size > 8:
+            # KOKPIT (jasny)
+            brighter = tuple(min(255, c + 110) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.55,
+                                          size * 0.2, size * 0.25, brighter, rotation)
+
+            # DZIAŁA (na skrzydłach)
+            weapon_color = (120, 120, 140)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.65, 0,
+                                          size * 0.08, size * 0.15, weapon_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.65, 0,
+                                          size * 0.08, size * 0.15, weapon_color, rotation)
+
+            # PANELE na skrzydle
+            panel_color = tuple(max(0, c - 30) for c in color)
+            for i in range(2):
+                y_offset = -size * 0.15 + i * size * 0.2
+                ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.5, y_offset,
+                                              size * 0.12, size * 0.08, panel_color, rotation)
+                ShipRenderer._draw_detail_rect(screen, x, y, size * 0.5, y_offset,
+                                              size * 0.12, size * 0.08, panel_color, rotation)
+
+            # SILNIK (centralny)
+            engine_color = (90, 90, 110)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, size * 0.35,
+                                          size * 0.25, size * 0.2, engine_color, rotation)
+
+            if is_moving:
+                ShipRenderer._draw_engine_glow(screen, x, y, size, rotation, size * 0.45)
+
+            # ŚWIATŁA nawigacyjne
+            if size > 10:
+                light_positions = [(-size * 0.7, 0), (size * 0.7, 0)]
+                for lx, ly in light_positions:
+                    lx_r, ly_r = ShipRenderer._rotate_point(lx, ly, rotation)
+                    pygame.draw.circle(screen, (255, 100, 100), (int(x + lx_r), int(y + ly_r)), 2)
 
     @staticmethod
     def _draw_cruiser(screen: pygame.Surface, x: int, y: int, size: float,
-                     color: tuple, rotation: float):
+                     color: tuple, rotation: float, is_moving: bool):
         """
-        Rysuj Cruiser - duży statek z wieloma sekcjami
+        Cruiser - duży statek z wieloma sekcjami i uzbrojeniem
         """
-        # Główny korpus (wydłużony prostokąt)
+        # GŁÓWNY KORPUS (wydłużony sześciokąt)
         main_hull_local = [
-            (0, -size * 0.8),
-            (-size * 0.35, -size * 0.3),
-            (-size * 0.35, size * 0.6),
-            (0, size * 0.8),
-            (size * 0.35, size * 0.6),
-            (size * 0.35, -size * 0.3),
+            (0, -size * 0.75),
+            (-size * 0.3, -size * 0.35),
+            (-size * 0.35, size * 0.2),
+            (-size * 0.25, size * 0.65),
+            (size * 0.25, size * 0.65),
+            (size * 0.35, size * 0.2),
+            (size * 0.3, -size * 0.35),
         ]
 
-        # Nadbudówki (wieże)
-        tower_local = [
-            (-size * 0.15, -size * 0.5),
-            (-size * 0.15, -size * 0.2),
-            (size * 0.15, -size * 0.2),
-            (size * 0.15, -size * 0.5),
-        ]
-
-        # Obróć punkty
         main_hull = []
         for px, py in main_hull_local:
             rx, ry = ShipRenderer._rotate_point(px, py, rotation)
             main_hull.append((x + rx, y + ry))
 
-        tower = []
-        for px, py in tower_local:
-            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
-            tower.append((x + rx, y + ry))
-
-        # Rysuj korpus główny
-        darker = tuple(max(0, c - 60) for c in color)
+        # Rysuj korpus
+        darker = tuple(max(0, c - 80) for c in color)
         pygame.draw.polygon(screen, darker, main_hull, 2)
         pygame.draw.polygon(screen, color, main_hull)
 
-        # Rysuj wieżę
-        if size > 10:
-            tower_color = tuple(min(255, c + 40) for c in color)
-            pygame.draw.polygon(screen, tower_color, tower)
-            pygame.draw.polygon(screen, darker, tower, 1)
+        if size > 12:
+            # MOSTEK DOWODZENIA (wysoka wieża)
+            bridge_color = tuple(min(255, c + 60) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.45,
+                                          size * 0.25, size * 0.35, bridge_color, rotation)
 
-        # Highlight (przednia sekcja)
-        if size > 10:
-            brighter = tuple(min(255, c + 80) for c in color)
-            pygame.draw.polygon(screen, brighter, [main_hull[0], main_hull[1], main_hull[5]])
+            # OKNA mostka
+            window_color = (150, 200, 255)
+            for i in range(3):
+                wx = -size * 0.08 + i * size * 0.08
+                ShipRenderer._draw_detail_rect(screen, x, y, wx, -size * 0.45,
+                                              size * 0.04, size * 0.06, window_color, rotation)
+
+            # WIEŻE OBRONNE (2 po bokach)
+            turret_color = tuple(max(0, c - 40) for c in color)
+            # Lewa
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.28, -size * 0.15,
+                                          size * 0.15, size * 0.2, turret_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.28, -size * 0.05,
+                                          size * 0.08, size * 0.12, darker, rotation)
+            # Prawa
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.28, -size * 0.15,
+                                          size * 0.15, size * 0.2, turret_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.28, -size * 0.05,
+                                          size * 0.08, size * 0.12, darker, rotation)
+
+            # PANELE PANCERZA (linie)
+            panel_color = tuple(max(0, c - 35) for c in color)
+            for i in range(4):
+                y_offset = -size * 0.25 + i * size * 0.25
+                ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.25, y_offset,
+                                              size * 0.45, size * 0.08, panel_color, rotation, outline=True)
+
+            # SILNIKI (2 duże)
+            engine_color = (80, 80, 100)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.15, size * 0.55,
+                                          size * 0.2, size * 0.25, engine_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.15, size * 0.55,
+                                          size * 0.2, size * 0.25, engine_color, rotation)
+
+            if is_moving:
+                ShipRenderer._draw_engine_glow_dual(screen, x, y, size, rotation,
+                                                   -size * 0.15, size * 0.15, size * 0.67)
+
+            # ANTENY / SENSORY
+            if size > 18:
+                antenna_color = (120, 140, 160)
+                for ax in [-size * 0.2, size * 0.2]:
+                    ax_r, ay_r = ShipRenderer._rotate_point(ax, -size * 0.7, rotation)
+                    pygame.draw.circle(screen, antenna_color, (int(x + ax_r), int(y + ay_r)), 2)
 
     @staticmethod
     def _draw_battleship(screen: pygame.Surface, x: int, y: int, size: float,
-                        color: tuple, rotation: float):
+                        color: tuple, rotation: float, is_moving: bool):
         """
-        Rysuj Battleship - ogromny statek z ciężkim uzbrojeniem
+        Battleship - masywny okręt wojenny z ciężkim pancerzem
         """
-        # Masywny korpus
+        # MASYWNY KORPUS
         main_hull_local = [
             (0, -size * 0.7),
-            (-size * 0.5, -size * 0.3),
-            (-size * 0.5, size * 0.4),
-            (-size * 0.3, size * 0.7),
-            (size * 0.3, size * 0.7),
-            (size * 0.5, size * 0.4),
-            (size * 0.5, -size * 0.3),
+            (-size * 0.35, -size * 0.35),
+            (-size * 0.45, 0),
+            (-size * 0.4, size * 0.4),
+            (-size * 0.2, size * 0.65),
+            (size * 0.2, size * 0.65),
+            (size * 0.4, size * 0.4),
+            (size * 0.45, 0),
+            (size * 0.35, -size * 0.35),
         ]
 
-        # Mostek
-        bridge_local = [
-            (-size * 0.2, -size * 0.4),
-            (-size * 0.2, -size * 0.1),
-            (size * 0.2, -size * 0.1),
-            (size * 0.2, -size * 0.4),
-        ]
-
-        # Obróć punkty
         main_hull = []
         for px, py in main_hull_local:
             rx, ry = ShipRenderer._rotate_point(px, py, rotation)
             main_hull.append((x + rx, y + ry))
 
-        bridge = []
-        for px, py in bridge_local:
-            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
-            bridge.append((x + rx, y + ry))
-
         # Rysuj korpus
-        darker = tuple(max(0, c - 60) for c in color)
+        darker = tuple(max(0, c - 80) for c in color)
         pygame.draw.polygon(screen, darker, main_hull, 3)
         pygame.draw.polygon(screen, color, main_hull)
 
-        # Rysuj mostek
-        if size > 15:
-            bridge_color = tuple(min(255, c + 60) for c in color)
-            pygame.draw.polygon(screen, bridge_color, bridge)
-            pygame.draw.polygon(screen, darker, bridge, 2)
+        if size > 16:
+            # MOSTEK GŁÓWNY (potężna wieża)
+            bridge_color = tuple(min(255, c + 70) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.4,
+                                          size * 0.35, size * 0.4, bridge_color, rotation)
+            # Górna część mostka
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.5,
+                                          size * 0.25, size * 0.15, tuple(min(255, c + 90) for c in color), rotation)
 
-        # Dodatkowe szczegóły (linie pancerza)
-        if size > 20:
-            detail_color = tuple(max(0, c - 40) for c in color)
-            for i in range(3):
-                offset = -size * 0.2 + i * size * 0.2
-                p1_local = (-size * 0.4, offset)
-                p2_local = (size * 0.4, offset)
+            # GŁÓWNE BATERIE (4 wieże działowe)
+            turret_color = tuple(max(0, c - 50) for c in color)
+            gun_color = (100, 100, 120)
 
-                p1_rx, p1_ry = ShipRenderer._rotate_point(*p1_local, rotation)
-                p2_rx, p2_ry = ShipRenderer._rotate_point(*p2_local, rotation)
+            # Przednie baterie
+            for tx in [-size * 0.25, size * 0.25]:
+                ShipRenderer._draw_detail_rect(screen, x, y, tx, -size * 0.15,
+                                              size * 0.18, size * 0.22, turret_color, rotation)
+                # Lufa
+                ShipRenderer._draw_detail_rect(screen, x, y, tx, -size * 0.28,
+                                              size * 0.08, size * 0.15, gun_color, rotation)
 
-                pygame.draw.line(screen, detail_color,
-                               (x + p1_rx, y + p1_ry),
-                               (x + p2_rx, y + p2_ry), 1)
+            # Tylne baterie
+            for tx in [-size * 0.3, size * 0.3]:
+                ShipRenderer._draw_detail_rect(screen, x, y, tx, size * 0.2,
+                                              size * 0.16, size * 0.2, turret_color, rotation)
+                # Lufa
+                ShipRenderer._draw_detail_rect(screen, x, y, tx, size * 0.08,
+                                              size * 0.07, size * 0.12, gun_color, rotation)
+
+            # PANELE PANCERZA (masywne płyty)
+            armor_color = tuple(max(0, c - 40) for c in color)
+            for i in range(5):
+                y_offset = -size * 0.3 + i * size * 0.25
+                # Lewy panel
+                ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.35, y_offset,
+                                              size * 0.15, size * 0.12, armor_color, rotation)
+                # Prawy panel
+                ShipRenderer._draw_detail_rect(screen, x, y, size * 0.35, y_offset,
+                                              size * 0.15, size * 0.12, armor_color, rotation)
+
+            # SILNIKI (4 potężne)
+            engine_color = (70, 70, 90)
+            for ex in [-size * 0.25, -size * 0.08, size * 0.08, size * 0.25]:
+                ShipRenderer._draw_detail_rect(screen, x, y, ex, size * 0.55,
+                                              size * 0.12, size * 0.22, engine_color, rotation)
+
+            if is_moving:
+                # 4 engine glows
+                for ex in [-size * 0.25, -size * 0.08, size * 0.08, size * 0.25]:
+                    ex_r, ey_r = ShipRenderer._rotate_point(ex, size * 0.66, rotation)
+                    ShipRenderer._draw_single_engine_glow(screen, int(x + ex_r), int(y + ey_r), size * 0.08)
+
+            # ANTENY I SENSORY
+            if size > 24:
+                sensor_color = (140, 160, 200)
+                # Anteny na mostku
+                for ax in [-size * 0.12, size * 0.12]:
+                    ax_r, ay_r = ShipRenderer._rotate_point(ax, -size * 0.6, rotation)
+                    pygame.draw.circle(screen, sensor_color, (int(x + ax_r), int(y + ay_r)), 2)
+
+                # Radar dishes
+                dish_color = (180, 180, 200)
+                for dx in [-size * 0.35, size * 0.35]:
+                    dx_r, dy_r = ShipRenderer._rotate_point(dx, -size * 0.2, rotation)
+                    pygame.draw.circle(screen, dish_color, (int(x + dx_r), int(y + dy_r)), 3, 1)
 
     @staticmethod
     def _draw_colony_ship(screen: pygame.Surface, x: int, y: int, size: float,
-                         color: tuple, rotation: float):
+                         color: tuple, rotation: float, is_moving: bool):
         """
-        Rysuj Colony Ship - okrągły statek transportowy
+        Colony Ship - duży statek transportowy z modułami kolonizacyjnymi
         """
-        # Korpus cylindryczny (elipsa)
-        # Rysuj jako serie elips dla efektu 3D
-        darker = tuple(max(0, c - 60) for c in color)
+        # GŁÓWNY KONTENER (cylindryczny)
+        # Użyj prostokątów do stworzenia efektu cylindra
+        darker = tuple(max(0, c - 80) for c in color)
 
-        # Zewnętrzna elipsa (cień)
-        rect = pygame.Rect(x - size * 0.6, y - size * 0.8,
-                          size * 1.2, size * 1.6)
-        pygame.draw.ellipse(screen, darker, rect, 2)
+        # Główny cylinder (3 sekcje dla głębi)
+        mid_color = tuple(max(0, c - 30) for c in color)
+        light_color = tuple(min(255, c + 40) for c in color)
 
-        # Wypełnienie
-        pygame.draw.ellipse(screen, color, rect)
+        # Ciemna strona (lewa)
+        ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.2, 0,
+                                      size * 0.35, size * 1.3, darker, rotation)
+        # Środek
+        ShipRenderer._draw_detail_rect(screen, x, y, 0, 0,
+                                      size * 0.35, size * 1.3, mid_color, rotation)
+        # Jasna strona (prawa)
+        ShipRenderer._draw_detail_rect(screen, x, y, size * 0.2, 0,
+                                      size * 0.35, size * 1.3, light_color, rotation)
 
-        # Highlight (górna część)
-        if size > 8:
-            brighter = tuple(min(255, c + 80) for c in color)
-            highlight_rect = pygame.Rect(x - size * 0.4, y - size * 0.7,
-                                        size * 0.8, size * 0.8)
-            pygame.draw.ellipse(screen, brighter, highlight_rect)
-
-        # Cargo pods (małe prostokąty)
         if size > 10:
-            pod_color = tuple(max(0, c - 30) for c in color)
-            for i in range(-1, 2):
-                pod_y = y + i * size * 0.4
-                pygame.draw.rect(screen, pod_color,
-                               (x - size * 0.15, pod_y - size * 0.1,
-                                size * 0.3, size * 0.2))
+            # MODUŁY KOLONIZACYJNE (cargo pods)
+            pod_color = tuple(max(0, c - 50) for c in color)
+            pod_positions = [
+                (-size * 0.35, -size * 0.4), (size * 0.35, -size * 0.4),
+                (-size * 0.35, 0), (size * 0.35, 0),
+                (-size * 0.35, size * 0.4), (size * 0.35, size * 0.4),
+            ]
+
+            for px, py in pod_positions:
+                ShipRenderer._draw_detail_rect(screen, x, y, px, py,
+                                              size * 0.2, size * 0.25, pod_color, rotation)
+                # Okna/panele na podach
+                window_color = (100, 150, 200)
+                ShipRenderer._draw_detail_rect(screen, x, y, px, py,
+                                              size * 0.12, size * 0.08, window_color, rotation)
+
+            # KOKPIT (przód)
+            cockpit_color = tuple(min(255, c + 80) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.75,
+                                          size * 0.3, size * 0.25, cockpit_color, rotation)
+            # Okna kokpitu
+            window_color = (150, 200, 255)
+            for wx in [-size * 0.1, 0, size * 0.1]:
+                ShipRenderer._draw_detail_rect(screen, x, y, wx, -size * 0.75,
+                                              size * 0.05, size * 0.08, window_color, rotation)
+
+            # SILNIKI (tylne, 2 duże)
+            engine_color = (80, 80, 100)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.2, size * 0.6,
+                                          size * 0.25, size * 0.3, engine_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.2, size * 0.6,
+                                          size * 0.25, size * 0.3, engine_color, rotation)
+
+            if is_moving:
+                ShipRenderer._draw_engine_glow_dual(screen, x, y, size, rotation,
+                                                   -size * 0.2, size * 0.2, size * 0.75)
+
+            # LINIE KONSTRUKCYJNE
+            if size > 14:
+                line_color = tuple(max(0, c - 60) for c in color)
+                for ly in [-size * 0.5, -size * 0.15, size * 0.15, size * 0.5]:
+                    for lx_offset in range(-1, 2):
+                        lx = lx_offset * size * 0.15
+                        lx1_r, ly1_r = ShipRenderer._rotate_point(lx - size * 0.5, ly, rotation)
+                        lx2_r, ly2_r = ShipRenderer._rotate_point(lx + size * 0.5, ly, rotation)
+                        pygame.draw.line(screen, line_color,
+                                       (int(x + lx1_r), int(y + ly1_r)),
+                                       (int(x + lx2_r), int(y + ly2_r)), 1)
 
     @staticmethod
     def _draw_transport(screen: pygame.Surface, x: int, y: int, size: float,
-                       color: tuple, rotation: float):
+                       color: tuple, rotation: float, is_moving: bool):
         """
-        Rysuj Transport - prostokątny statek cargo
+        Transport - prostokątny statek cargo z kontenerami
         """
-        # Główny kontener (prostokąt)
-        main_container_local = [
-            (-size * 0.4, -size * 0.6),
-            (-size * 0.4, size * 0.6),
-            (size * 0.4, size * 0.6),
-            (size * 0.4, -size * 0.6),
-        ]
+        # GŁÓWNY KONTENER (prostokątny)
+        darker = tuple(max(0, c - 80) for c in color)
+        container_color = tuple(max(0, c - 30) for c in color)
 
-        # Kokpit (przód)
-        cockpit_local = [
-            (-size * 0.25, -size * 0.6),
-            (0, -size * 0.9),
-            (size * 0.25, -size * 0.6),
-        ]
+        ShipRenderer._draw_detail_rect(screen, x, y, 0, 0,
+                                      size * 0.7, size * 1.1, container_color, rotation)
+        ShipRenderer._draw_detail_rect(screen, x, y, 0, 0,
+                                      size * 0.7, size * 1.1, darker, rotation, outline=True)
 
-        # Obróć punkty
-        main_container = []
-        for px, py in main_container_local:
-            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
-            main_container.append((x + rx, y + ry))
+        if size > 10:
+            # KONTENERY CARGO (segmenty)
+            cargo_color = tuple(max(0, c - 40) for c in color)
+            cargo_positions = [
+                (-size * 0.25, -size * 0.35), (size * 0.25, -size * 0.35),
+                (-size * 0.25, -size * 0.05), (size * 0.25, -size * 0.05),
+                (-size * 0.25, size * 0.25), (size * 0.25, size * 0.25),
+            ]
 
-        cockpit = []
-        for px, py in cockpit_local:
-            rx, ry = ShipRenderer._rotate_point(px, py, rotation)
-            cockpit.append((x + rx, y + ry))
+            for cx, cy in cargo_positions:
+                ShipRenderer._draw_detail_rect(screen, x, y, cx, cy,
+                                              size * 0.25, size * 0.22, cargo_color, rotation)
+                # Oznaczenia na kontenerach
+                mark_color = tuple(min(255, c + 60) for c in color)
+                ShipRenderer._draw_detail_rect(screen, x, y, cx, cy,
+                                              size * 0.08, size * 0.05, mark_color, rotation)
 
-        # Rysuj kontener
-        darker = tuple(max(0, c - 60) for c in color)
-        pygame.draw.polygon(screen, darker, main_container, 2)
-        container_color = tuple(max(0, c - 20) for c in color)
-        pygame.draw.polygon(screen, container_color, main_container)
+            # KOKPIT (mały z przodu)
+            cockpit_color = tuple(min(255, c + 70) for c in color)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.7,
+                                          size * 0.25, size * 0.3, cockpit_color, rotation)
+            # Okna
+            window_color = (140, 180, 220)
+            ShipRenderer._draw_detail_rect(screen, x, y, 0, -size * 0.7,
+                                          size * 0.15, size * 0.12, window_color, rotation)
 
-        # Rysuj kokpit
-        pygame.draw.polygon(screen, color, cockpit)
-        pygame.draw.polygon(screen, darker, cockpit, 1)
+            # SILNIKI (2 po bokach)
+            engine_color = (75, 75, 95)
+            ShipRenderer._draw_detail_rect(screen, x, y, -size * 0.3, size * 0.5,
+                                          size * 0.15, size * 0.25, engine_color, rotation)
+            ShipRenderer._draw_detail_rect(screen, x, y, size * 0.3, size * 0.5,
+                                          size * 0.15, size * 0.25, engine_color, rotation)
 
-        # Szczegóły (linie cargo)
-        if size > 8:
-            detail_color = tuple(max(0, c - 40) for c in color)
-            for i in range(3):
-                offset = -size * 0.3 + i * size * 0.3
-                p1_local = (-size * 0.35, offset)
-                p2_local = (size * 0.35, offset)
+            if is_moving:
+                ShipRenderer._draw_engine_glow_dual(screen, x, y, size, rotation,
+                                                   -size * 0.3, size * 0.3, size * 0.62)
 
-                p1_rx, p1_ry = ShipRenderer._rotate_point(*p1_local, rotation)
-                p2_rx, p2_ry = ShipRenderer._rotate_point(*p2_local, rotation)
-
-                pygame.draw.line(screen, detail_color,
-                               (x + p1_rx, y + p1_ry),
-                               (x + p2_rx, y + p2_ry), 1)
+            # LINIE STRUKTURALNE
+            if size > 12:
+                struct_color = tuple(max(0, c - 50) for c in color)
+                # Poziome linie
+                for ly in [-size * 0.45, -size * 0.15, size * 0.15, size * 0.45]:
+                    lx1_r, ly1_r = ShipRenderer._rotate_point(-size * 0.35, ly, rotation)
+                    lx2_r, ly2_r = ShipRenderer._rotate_point(size * 0.35, ly, rotation)
+                    pygame.draw.line(screen, struct_color,
+                                   (int(x + lx1_r), int(y + ly1_r)),
+                                   (int(x + lx2_r), int(y + ly2_r)), 1)
+                # Pionowe linie
+                for lx in [-size * 0.3, 0, size * 0.3]:
+                    lx1_r, ly1_r = ShipRenderer._rotate_point(lx, -size * 0.55, rotation)
+                    lx2_r, ly2_r = ShipRenderer._rotate_point(lx, size * 0.55, rotation)
+                    pygame.draw.line(screen, struct_color,
+                                   (int(x + lx1_r), int(y + ly1_r)),
+                                   (int(x + lx2_r), int(y + ly2_r)), 1)
 
     @staticmethod
     def _draw_engine_glow(screen: pygame.Surface, x: int, y: int,
-                         size: float, rotation: float):
-        """
-        Rysuj poświatę silników (gdy statek się porusza)
-        """
-        # Pozycja tyłu statku (zależy od rotacji)
-        engine_offset_local = (0, size * 0.7)
-        engine_x_offset, engine_y_offset = ShipRenderer._rotate_point(
-            *engine_offset_local, rotation
-        )
-
+                         size: float, rotation: float, offset_y: float):
+        """Pojedyncza poświata silnika (centralny)"""
+        engine_x_offset, engine_y_offset = ShipRenderer._rotate_point(0, offset_y, rotation)
         engine_x = x + engine_x_offset
         engine_y = y + engine_y_offset
 
-        # Poświata silnika (niebieski/cyan)
+        ShipRenderer._draw_single_engine_glow(screen, int(engine_x), int(engine_y), size * 0.15)
+
+    @staticmethod
+    def _draw_engine_glow_dual(screen: pygame.Surface, x: int, y: int,
+                               size: float, rotation: float,
+                               left_x: float, right_x: float, offset_y: float):
+        """Podwójna poświata silników (2 silniki)"""
+        for ex in [left_x, right_x]:
+            ex_r, ey_r = ShipRenderer._rotate_point(ex, offset_y, rotation)
+            ShipRenderer._draw_single_engine_glow(screen, int(x + ex_r), int(y + ey_r), size * 0.12)
+
+    @staticmethod
+    def _draw_single_engine_glow(screen: pygame.Surface, ex: int, ey: int, radius: float):
+        """Pojedyncza poświata (używana wielokrotnie)"""
         glow_color = (100, 180, 255)
 
-        # 3 warstwy glow
         for i in range(3, 0, -1):
-            glow_radius = int((i / 3) * size * 0.4)
-            alpha = int((i / 3) * 120)
+            glow_radius = int((i / 3) * radius * 3)
+            if glow_radius < 1:
+                continue
+            alpha = int((i / 3) * 140)
 
-            glow_surf = pygame.Surface((glow_radius * 4, glow_radius * 4),
-                                      pygame.SRCALPHA)
+            glow_surf = pygame.Surface((glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
             pygame.draw.circle(glow_surf, (*glow_color, alpha),
-                             (glow_radius * 2, glow_radius * 2), glow_radius)
+                             (glow_radius, glow_radius), glow_radius)
 
             screen.blit(glow_surf,
-                       (engine_x - glow_radius * 2, engine_y - glow_radius * 2),
+                       (ex - glow_radius, ey - glow_radius),
                        special_flags=pygame.BLEND_ALPHA_SDL2)
 
     @staticmethod
     def _draw_selection_ring(screen: pygame.Surface, x: int, y: int, size: float):
-        """
-        Rysuj pierścień zaznaczenia wokół statku
-        """
-        ring_radius = int(size * 1.3)
+        """Pierścień zaznaczenia wokół statku"""
+        ring_radius = int(size * 1.4)
         pygame.draw.circle(screen, (255, 255, 255), (x, y), ring_radius, 2)
-
-        # Druga linia dla lepszej widoczności
         pygame.draw.circle(screen, (200, 200, 200), (x, y), ring_radius + 1, 1)
 
     @staticmethod
@@ -423,18 +610,8 @@ class ShipRenderer:
                                 target_x: float, target_y: float) -> float:
         """
         Oblicz rotację statku w kierunku celu
-
-        Args:
-            current_x, current_y: Obecna pozycja statku
-            target_x, target_y: Cel ruchu
-
-        Returns:
-            float: Kąt rotacji w radianach (0 = góra)
         """
         dx = target_x - current_x
         dy = target_y - current_y
-
-        # Oblicz kąt (atan2 zwraca kąt od osi X, konwertujemy na obrót od góry)
         angle = math.atan2(dx, dy)
-
         return angle
