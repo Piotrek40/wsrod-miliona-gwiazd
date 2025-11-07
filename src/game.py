@@ -166,14 +166,22 @@ class Game:
         - Piracki Cruiser w pobliżu systemu gracza
         - Bojowy Cruiser dla gracza
         """
-        if not self.player_empire or not self.player_empire.home_system_id:
+        if not self.player_empire:
+            print("⚠️ UWAGA: Nie można stworzyć test scenario - brak player_empire")
+            return
+
+        if not self.player_empire.home_system_id:
+            print("⚠️ UWAGA: Nie można stworzyć test scenario - brak home_system_id")
             return
 
         player_home = self.galaxy.find_system_by_id(self.player_empire.home_system_id)
         if not player_home:
+            print("⚠️ UWAGA: Nie można stworzyć test scenario - nie znaleziono home system")
             return
 
-        print("\n🏴‍☠️ TESTOWY SCENARIUSZ COMBAT:")
+        print("\n" + "="*60)
+        print("🏴‍☠️ TESTOWY SCENARIUSZ COMBAT - POCZĄTEK")
+        print("="*60)
 
         # 1. Stwórz pirackie imperium (bez AI controllera, więc piraci stoją w miejscu)
         from src.models.empire import Empire
@@ -227,8 +235,14 @@ class Game:
 
         print(f"  • Twój Cruiser ({player_cruiser.name}) @ ({int(player_home.x)}, {int(player_home.y)})")
         print(f"    HP: {player_cruiser.max_hp}, ATK: {player_cruiser.attack}, DEF: {player_cruiser.defense}")
-        print(f"\n  💡 Wyślij swój Cruiser do pirata (PPM na pozycję ~{int(pirate_x)}, {int(pirate_y)})")
-        print(f"     Gdy będą w zasięgu 100 jednostek, bitwa rozpocznie się automatycznie!")
+        print(f"\n  💡 INSTRUKCJA:")
+        print(f"     1. Znajdź swojego Cruisera '⚔️ Obrońca' w swoim systemie domowym")
+        print(f"     2. Kliknij PPM aby wysłać go do pozycji pirata: (~{int(pirate_x)}, ~{int(pirate_y)})")
+        print(f"     3. Gdy będą w zasięgu 100 jednostek, bitwa rozpocznie się automatycznie!")
+        print(f"     4. Zobaczysz efekty lasery i eksplozje podczas walki!")
+        print("="*60)
+        print("🏴‍☠️ TESTOWY SCENARIUSZ COMBAT - KONIEC")
+        print("="*60 + "\n")
 
     def _create_starting_ships(self, empire: Empire, system: StarSystem):
         """Stwórz początkowe statki dla imperium"""
