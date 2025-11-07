@@ -171,7 +171,7 @@ class Game:
             print("⚠️ UWAGA: Nie można stworzyć test scenario - brak player_empire")
             return
 
-        if not self.player_empire.home_system_id:
+        if self.player_empire.home_system_id is None:
             print("⚠️ UWAGA: Nie można stworzyć test scenario - brak home_system_id")
             return
 
@@ -195,9 +195,8 @@ class Game:
         self.empires.append(pirate_empire)
 
         # Ustaw piratów w stanie wojny z graczem
-        relation_key = (min(self.player_empire.id, pirate_empire.id),
-                       max(self.player_empire.id, pirate_empire.id))
-        self.empires_relations[relation_key] = "war"
+        pirate_empire.set_relation(self.player_empire.id, "war")
+        self.player_empire.set_relation(pirate_empire.id, "war")
 
         # 2. Stwórz pirackiego Cruisera BLISKO systemu gracza (dystans ~70 jednostek)
         # Zmniejszony z 150 na 70 żeby był widoczny
