@@ -252,8 +252,8 @@ class AIController:
             available_buildings = self._get_available_buildings()
             if available_buildings:
                 building_id = random.choice(available_buildings)
-                from src.models.planet import ProductionItem
-                planet.add_to_production_queue(ProductionItem("building", building_id=building_id))
+                building_cost = BUILDINGS[building_id].cost
+                planet.add_building_to_queue(building_id, building_cost)
                 return
 
         # Zdecyduj: budynek vs statek
@@ -261,14 +261,13 @@ class AIController:
             available_buildings = self._get_available_buildings()
             if available_buildings:
                 building_id = random.choice(available_buildings)
-                from src.models.planet import ProductionItem
-                planet.add_to_production_queue(ProductionItem("building", building_id=building_id))
+                building_cost = BUILDINGS[building_id].cost
+                planet.add_building_to_queue(building_id, building_cost)
                 return
 
         # Buduj statki
         ship_type = self._choose_ship_to_build()
-        from src.models.planet import ProductionItem
-        planet.add_to_production_queue(ProductionItem("ship", ship_type=ship_type))
+        planet.add_ship_to_queue(ship_type)
 
     def _get_available_buildings(self) -> list[str]:
         """Pobierz listę budynków które AI może budować"""
