@@ -2,6 +2,7 @@
 Główna logika gry
 """
 import pygame
+import random
 from typing import Optional
 from src.models.galaxy import Galaxy, StarSystem
 from src.models.empire import Empire
@@ -170,7 +171,7 @@ class Game:
             print("⚠️ UWAGA: Nie można stworzyć test scenario - brak player_empire")
             return
 
-        if not self.player_empire.home_system_id:
+        if self.player_empire.home_system_id is None:
             print("⚠️ UWAGA: Nie można stworzyć test scenario - brak home_system_id")
             return
 
@@ -194,9 +195,8 @@ class Game:
         self.empires.append(pirate_empire)
 
         # Ustaw piratów w stanie wojny z graczem
-        relation_key = (min(self.player_empire.id, pirate_empire.id),
-                       max(self.player_empire.id, pirate_empire.id))
-        self.empires_relations[relation_key] = "war"
+        pirate_empire.set_relation(self.player_empire.id, "war")
+        self.player_empire.set_relation(pirate_empire.id, "war")
 
         # 2. Stwórz pirackiego Cruisera BLISKO systemu gracza (dystans ~70 jednostek)
         # Zmniejszony z 150 na 70 żeby był widoczny
@@ -692,7 +692,6 @@ class Game:
                 total_destroyed = result.attacker_ships_destroyed + result.defender_ships_destroyed
                 for i in range(total_destroyed):
                     # Losowa pozycja wokół centrum bitwy
-                    import random
                     offset_x = random.uniform(-50, 50)
                     offset_y = random.uniform(-50, 50)
                     self.combat_effects.add_explosion(avg_x + offset_x, avg_y + offset_y, size=40)
