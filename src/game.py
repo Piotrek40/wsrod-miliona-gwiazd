@@ -12,6 +12,7 @@ from src.ui.widgets import Panel, Button, draw_text
 from src.ui.screens.planet_screen import PlanetScreen
 from src.ui.screens.research_screen import ResearchScreen
 from src.combat import CombatManager, CombatEffectsManager
+from src.ai import AIController
 from src.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, WINDOW_TITLE,
     Colors, NUM_AI_EMPIRES, STARTING_SHIPS, PANEL_WIDTH,
@@ -48,6 +49,9 @@ class Game:
         self.combat_manager = CombatManager()
         self.combat_effects = CombatEffectsManager()
         self.last_turn_battles = []  # Bitwy z ostatniej tury (do wyświetlenia)
+
+        # AI system
+        self.ai_controllers: dict[int, AIController] = {}  # empire_id -> AIController
 
         # UI
         self.selected_system: Optional[StarSystem] = None
@@ -144,7 +148,71 @@ class Game:
                 if i != j:
                     emp1.set_relation(emp2.id, "war")
 
+        # Inicjalizuj AI controllery
+        print("Inicjalizacja AI...")
+        for empire in self.empires:
+            if not empire.is_player:
+                self.ai_controllers[empire.id] = AIController(empire, self.galaxy)
+                print(f"  AI {empire.name} ({empire.ai_personality})")
+
+        # TESTOWE: Dodaj pirackiego bossa i statek bojowy dla gracza
+        self._create_test_combat_scenario()
+
         print("Gra gotowa!")
+
+    def _create_test_combat_scenario(self):
+        """
+        TESTOWE: Stwórz scenariusz testowy do sprawdzenia combat
+        - Piracki Cruiser w pobliżu systemu gracza
+        - Bojowy Cruiser dla gracza
+        """
+        if not self.player_empire or not self.player_empire.home_system_id:
+            return
+
+        player_home = self.galaxy.find_system_by_id(self.player_empire.home_system_id)
+        if not player_home:
+            return
+
+        print("\n🏴‍☠️ TESTOWY SCENARIUSZ COMBAT:")
+
+        # 1. Stwórz pirackiego Cruisera w pobliżu (dystans ~150 jednostek)
+        pirate_x = player_home.x + 150
+        pirate_y = player_home.y + 50
+
+        # Pirat nie należy do żadnego imperium - użyj ID -1 (neutralny/pirat)
+        # Ale musimy go dodać do jakiegoś imperium żeby combat działał, użyjmy pierwszego AI
+        pirate_empire_id = self.empires[1].id if len(self.empires) > 1 else 0
+
+        pirate_cruiser = Ship.create_ship(
+            ship_id=self.next_ship_id,
+            ship_type=ShipType.CRUISER,
+            owner_id=pirate_empire_id,
+            x=pirate_x,
+            y=pirate_y
+        )
+        pirate_cruiser.name = "🏴‍☠️ Piracki Boss"
+        self.ships.append(pirate_cruiser)
+        self.next_ship_id += 1
+
+        print(f"  • Piracki Cruiser ({pirate_cruiser.name}) @ ({int(pirate_x)}, {int(pirate_y)})")
+        print(f"    HP: {pirate_cruiser.max_hp}, ATK: {pirate_cruiser.attack}, DEF: {pirate_cruiser.defense}")
+
+        # 2. Dodaj bojowy Cruiser dla gracza w jego systemie
+        player_cruiser = Ship.create_ship(
+            ship_id=self.next_ship_id,
+            ship_type=ShipType.CRUISER,
+            owner_id=self.player_empire.id,
+            x=player_home.x,
+            y=player_home.y
+        )
+        player_cruiser.name = "⚔️ Obrońca"
+        self.ships.append(player_cruiser)
+        self.next_ship_id += 1
+
+        print(f"  • Twój Cruiser ({player_cruiser.name}) @ ({int(player_home.x)}, {int(player_home.y)})")
+        print(f"    HP: {player_cruiser.max_hp}, ATK: {player_cruiser.attack}, DEF: {player_cruiser.defense}")
+        print(f"\n  💡 Wyślij swój Cruiser do pirata (PPM na pozycję ~{int(pirate_x)}, {int(pirate_y)})")
+        print(f"     Gdy będą blisko, bitwa rozpocznie się automatycznie!")
 
     def _create_starting_ships(self, empire: Empire, system: StarSystem):
         """Stwórz początkowe statki dla imperium"""
@@ -547,9 +615,14 @@ class Game:
                         explored_systems.add(ship.target_system_id)
                         print(f"✓ {target_system.name} odkryty!")
 
-                # NIE auto-kolonizuj - gracz musi nacisnąć klawisz 'C'
+                # Auto-kolonizacja dla AI (gracz musi nacisnąć 'C')
+                if ship.ship_type == ShipType.COLONY_SHIP and ship.owner_id != self.player_empire.id:
+                    # AI colony ship - próbuj skolonizować automatycznie
+                    colonized = self._try_colonize(ship)
+                    if colonized:
+                        ships_to_remove.append(ship)  # Usuń statek kolonistów po kolonizacji
                 # Dla statków innych niż kolonizacyjne wyczyść cel po dotarciu
-                if ship.ship_type != ShipType.COLONY_SHIP:
+                elif ship.ship_type != ShipType.COLONY_SHIP:
                     ship.target_system_id = None
 
         # Usuń statki po iteracji
@@ -625,6 +698,10 @@ class Game:
 
                     print(f"   🏆 {winner} pokonał {loser} ({result.rounds} rund)")
                     print(f"      Straty: {result.attacker_ships_destroyed} vs {result.defender_ships_destroyed}")
+
+        # 1.7. AI podejmuje decyzje
+        for empire_id, ai_controller in self.ai_controllers.items():
+            ai_controller.make_turn_decisions(self.ships)
 
         # 2. Aktualizacja zasobów imperii (przed wzrostem populacji!)
         self._update_empire_resources()
