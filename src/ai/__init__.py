@@ -1,5 +1,5 @@
 """
-System AI dla imperiów komputerowych
+System AI dla imperiow komputerowych
 """
 from src.ai.ai_controller import AIController
 
