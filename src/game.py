@@ -3,6 +3,7 @@ Główna logika gry
 """
 import pygame
 import random
+import math
 from typing import Optional
 from src.models.galaxy import Galaxy, StarSystem
 from src.models.empire import Empire
@@ -312,7 +313,6 @@ class Game:
                 if event.button == 3:
                     # Sprawdź czy to było przeciąganie czy kliknięcie
                     if self.right_click_start_pos:
-                        import math
                         dx = mouse_pos[0] - self.right_click_start_pos[0]
                         dy = mouse_pos[1] - self.right_click_start_pos[1]
                         distance = math.sqrt(dx*dx + dy*dy)
@@ -485,7 +485,6 @@ class Game:
 
     def _find_ship_at(self, world_x: float, world_y: float, empire_id: int, tolerance: float = 15) -> Optional[Ship]:
         """Znajdź statek w danej pozycji"""
-        import math
         for ship in self.ships:
             if ship.owner_id != empire_id:
                 continue
@@ -496,7 +495,6 @@ class Game:
 
     def _find_all_ships_at(self, world_x: float, world_y: float, empire_id: int, tolerance: float = 15) -> list[Ship]:
         """Znajdź WSZYSTKIE statki w danej pozycji (dla nakładających się)"""
-        import math
         found_ships = []
         for ship in self.ships:
             if ship.owner_id != empire_id:

@@ -107,98 +107,79 @@ class Planet:
         """Czy planeta jest skolonizowana"""
         return self.owner_id is not None
 
-    def colonize(self, empire_id: int, initial_population: float = 10.0):
-        """Kolonizuj planetę"""
-        self.owner_id = empire_id
-        self.population = initial_population
+    def colonize(self, empire_id: int, initial_population: float = 10.0) -> bool:
+        """
+        Kolonizuj planetę.
 
-    def calculate_production(self) -> float:
-        """Oblicz produkcję (minerały) planety na turę"""
+        Args:
+            empire_id: ID imperium kolonizującego
+            initial_population: Początkowa populacja
+
+        Returns:
+            bool: True jeśli kolonizacja się powiodła, False jeśli planeta już skolonizowana
+        """
+        if self.is_colonized:
+            return False
+        self.owner_id = empire_id
+        self.population = min(initial_population, self.max_population)
+        return True
+
+    def _calculate_resource(
+        self,
+        resource_type: str,
+        base_per_pop: float,
+        use_mineral_richness: bool = False
+    ) -> float:
+        """
+        Wspólna metoda obliczania zasobów planety.
+
+        Args:
+            resource_type: Typ zasobu ('production', 'science', 'food', 'energy')
+            base_per_pop: Bazowa produkcja na jednostkę populacji
+            use_mineral_richness: Czy użyć mnożnika bogactwa minerałów
+
+        Returns:
+            float: Obliczona wartość zasobu na turę
+        """
         if not self.is_colonized:
             return 0.0
 
         # Bazowa produkcja z populacji
-        base_production = self.population * BASE_PRODUCTION_PER_POP * self.mineral_richness
+        base_value = self.population * base_per_pop
+        if use_mineral_richness:
+            base_value *= self.mineral_richness
 
         # Modyfikator typu planety
-        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('production', 1.0)
-        base_production *= planet_modifier
+        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get(resource_type, 1.0)
+        base_value *= planet_modifier
 
         # Bonusy procentowe z budynków
-        building_bonus = sum(b.production_bonus for b in self.buildings)
-        production = base_production * (1.0 + building_bonus)
+        bonus_attr = f'{resource_type}_bonus'
+        building_bonus = sum(getattr(b, bonus_attr, 0.0) for b in self.buildings)
+        result = base_value * (1.0 + building_bonus)
 
         # Bonusy płaskie z budynków
-        flat_bonus = sum(b.production_flat for b in self.buildings)
-        production += flat_bonus
+        flat_attr = f'{resource_type}_flat'
+        flat_bonus = sum(getattr(b, flat_attr, 0.0) for b in self.buildings)
+        result += flat_bonus
 
-        return production
+        return result
+
+    def calculate_production(self) -> float:
+        """Oblicz produkcję (minerały) planety na turę"""
+        return self._calculate_resource('production', BASE_PRODUCTION_PER_POP, use_mineral_richness=True)
 
     def calculate_science(self) -> float:
         """Oblicz punkty nauki na turę"""
-        if not self.is_colonized:
-            return 0.0
-
-        # Bazowa nauka z populacji
-        base_science = self.population * BASE_SCIENCE_PER_POP
-
-        # Modyfikator typu planety
-        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('science', 1.0)
-        base_science *= planet_modifier
-
-        # Bonusy procentowe z budynków
-        building_bonus = sum(b.science_bonus for b in self.buildings)
-        science = base_science * (1.0 + building_bonus)
-
-        # Bonusy płaskie z budynków
-        flat_bonus = sum(b.science_flat for b in self.buildings)
-        science += flat_bonus
-
-        return science
+        return self._calculate_resource('science', BASE_SCIENCE_PER_POP)
 
     def calculate_food(self) -> float:
         """Oblicz produkcję żywności na turę"""
-        if not self.is_colonized:
-            return 0.0
-
-        # Bazowa produkcja żywności z populacji
-        base_food = self.population * BASE_FOOD_PER_POP
-
-        # Modyfikator typu planety (ważny - pustynne/skalne mają mało żywności!)
-        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('food', 1.0)
-        base_food *= planet_modifier
-
-        # Bonusy procentowe z budynków (farmy!)
-        building_bonus = sum(b.food_bonus for b in self.buildings)
-        food = base_food * (1.0 + building_bonus)
-
-        # Bonusy płaskie z budynków
-        flat_bonus = sum(b.food_flat for b in self.buildings)
-        food += flat_bonus
-
-        return food
+        return self._calculate_resource('food', BASE_FOOD_PER_POP)
 
     def calculate_energy(self) -> float:
         """Oblicz produkcję energii na turę"""
-        if not self.is_colonized:
-            return 0.0
-
-        # Bazowa produkcja energii z populacji
-        base_energy = self.population * BASE_ENERGY_PER_POP
-
-        # Modyfikator typu planety (pustynne dają więcej energii słonecznej!)
-        planet_modifier = PLANET_TYPE_MODIFIERS.get(self.planet_type, {}).get('energy', 1.0)
-        base_energy *= planet_modifier
-
-        # Bonusy procentowe z budynków (elektrownie!)
-        building_bonus = sum(b.energy_bonus for b in self.buildings)
-        energy = base_energy * (1.0 + building_bonus)
-
-        # Bonusy płaskie z budynków
-        flat_bonus = sum(b.energy_flat for b in self.buildings)
-        energy += flat_bonus
-
-        return energy
+        return self._calculate_resource('energy', BASE_ENERGY_PER_POP)
 
     def grow_population(self, growth_rate: float = 0.05):
         """Wzrost populacji"""
