@@ -1,6 +1,7 @@
 """
 Manager zarządzający bitwami w grze
 """
+import math
 from typing import Optional
 from src.combat.battle import Battle, BattleResult
 from src.models.ship import Ship
@@ -133,7 +134,6 @@ class CombatManager:
         Returns:
             Optional[Battle]: Znaleziona bitwa lub None
         """
-        import math
         for battle in self.active_battles:
             distance = math.sqrt((battle.location_x - x)**2 + (battle.location_y - y)**2)
             if distance <= radius:

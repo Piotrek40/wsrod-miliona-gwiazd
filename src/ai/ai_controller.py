@@ -1,6 +1,7 @@
 """
 Kontroler AI dla imperiów komputerowych
 """
+import math
 import random
 from typing import Optional
 from src.models.empire import Empire
@@ -345,5 +346,4 @@ class AIController:
 
     def _distance(self, x1: float, y1: float, x2: float, y2: float) -> float:
         """Oblicz dystans między dwoma punktami"""
-        import math
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
